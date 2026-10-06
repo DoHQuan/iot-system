@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lịch sử Cảm biến - IoT Monitor</title>
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body class="page">
+<header class="topbar" id="topbar"></header>
+<main class="main">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Lịch sử Cảm biến</h1>
+      <p class="page-subtitle" id="todayLabel"></p>
+    </div>
+    <span class="conn-badge" id="connBadge"></span>
+  </div>
+
+  <div class="card">
+    <div class="table-title">
+      <div style="font-weight:700;font-size:15px">Lịch sử Cảm biến</div>
+      <p class="page-subtitle" style="margin:2px 0 16px">Dữ liệu đọc từ các cảm biến nhiệt độ, độ ẩm và ánh sáng</p>
+    </div>
+
+    <div class="toolbar">
+      <select id="typeFilter">
+        <option value="">Tất cả cảm biến</option>
+        <option value="temperature">Nhiệt độ</option>
+        <option value="humidity">Độ ẩm</option>
+        <option value="light">Ánh sáng</option>
+      </select>
+      <div class="field-icon" id="searchWrap" style="min-width:220px">
+        <input type="text" id="valueFilter" placeholder="Giá trị: Ví dụ: 25.5 hoặc >30" style="width:100%" />
+      </div>
+      <div class="date-range">
+        <div class="field-icon" id="fromWrap"><input type="date" id="fromDate" /></div>
+        <span>–</span>
+        <div class="field-icon" id="toWrap"><input type="date" id="toDate" /></div>
+      </div>
+      <button class="btn btn-primary" id="refreshBtn"><span>Làm mới</span></button>
+    </div>
+
+    <div id="tableWrap"></div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+</main>
+
+<script src="/js/icons.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+renderLayout('sensor-data');
+document.getElementById('todayLabel').textContent = todayLabel();
+document.getElementById('searchWrap').insertAdjacentHTML('afterbegin', Icons.search);
+document.getElementById('fromWrap').insertAdjacentHTML('afterbegin', Icons.calendar);
+document.getElementById('toWrap').insertAdjacentHTML('afterbegin', Icons.calendar);
+document.getElementById('refreshBtn').insertAdjacentHTML('afterbegin', Icons.refresh);
+
+const state = { page: 1, size: 8, type: '', value: '', from: '', to: '', sort: 'time_desc' };
+let debounceTimer;
+
+function buildQuery() {
+  const p = new URLSearchParams();
+  p.set('page', state.page);
+  p.set('size', state.size);
+  p.set('sort', state.sort);
+  if (state.type) p.set('type', state.type);
+  if (state.value) p.set('value', state.value);
+  if (state.from) p.set('from', state.from + ' 00:00:00');
+  if (state.to) p.set('to', state.to + ' 23:59:59');
+  return p.toString();
+}
+
+const VALUE_CLASS = { temperature: 'value-temp', humidity: 'value-humidity', light: 'value-light' };
+
+function renderTable(items) {
+  const wrap = document.getElementById('tableWrap');
+  if (!items.length) {
+    wrap.innerHTML = '<div class="empty-state">Không có dữ liệu cảm biến phù hợp.</div>';
+    return;
+  }
+  wrap.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Tên cảm biến</th>
+          <th class="sortable" data-sort="value">Giá trị đo</th>
+          <th class="sortable" data-sort="time">Thời gian thu thập</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items
+          .map(
+            (it) => `
+          <tr>
+            <td class="mono-id">${formatId(it.id)}</td>
+            <td>${escapeHtml(it.sensor_name)} <span class="note-cell">${escapeHtml(it.device_name)}</span></td>
+            <td class="${VALUE_CLASS[it.sensor_type] || ''}">${it.value}${it.unit ? ' ' + escapeHtml(it.unit) : ''}</td>
+            <td>${formatTime(it.time)}</td>
+          </tr>`
+          )
+          .join('')}
+      </tbody>
+    </table>
+  `;
+  wrap.querySelectorAll('th.sortable').forEach((th) => {
+    th.addEventListener('click', () => {
+      const base = th.dataset.sort;
+      state.sort = state.sort === `${base}_desc` ? `${base}_asc` : `${base}_desc`;
+      state.page = 1;
+      load();
+    });
+  });
+}
+
+async function load() {
+  try {
+    const data = await Api.get(`/api/sensor-data?${buildQuery()}`);
+    renderTable(data.items);
+    renderPager(document.getElementById('pagination'), data, (p) => { state.page = p; load(); });
+    setConnection(true);
+  } catch (err) {
+    document.getElementById('tableWrap').innerHTML = `<div class="error-state">Không thể tải dữ liệu cảm biến. Vui lòng thử lại sau. (${err.message})</div>`;
+    document.getElementById('pagination').innerHTML = '';
+    setConnection(false);
+  }
+}
+
+document.getElementById('typeFilter').addEventListener('change', (e) => { state.type = e.target.value; state.page = 1; load(); });
+document.getElementById('valueFilter').addEventListener('input', (e) => {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => { state.value = e.target.value.trim(); state.page = 1; load(); }, 350);
+});
+document.getElementById('fromDate').addEventListener('change', (e) => { state.from = e.target.value; state.page = 1; load(); });
+document.getElementById('toDate').addEventListener('change', (e) => { state.to = e.target.value; state.page = 1; load(); });
+document.getElementById('refreshBtn').addEventListener('click', load);
+
+load();
+</script>
+</body>
+</html>

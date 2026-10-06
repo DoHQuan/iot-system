@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hồ sơ - IoT Monitor</title>
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body class="page">
+<header class="topbar" id="topbar"></header>
+<main class="main" style="max-width:640px">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Hồ sơ</h1>
+      <p class="page-subtitle">Thông tin tài khoản đang đăng nhập.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="profile-row">
+      <div class="profile-label">Tên đăng nhập</div>
+      <div class="profile-value" id="pUsername"></div>
+    </div>
+    <div class="profile-row">
+      <div class="profile-label">Họ tên</div>
+      <div class="profile-value" id="pFullName"></div>
+    </div>
+    <div class="profile-row">
+      <div class="profile-label">Vai trò</div>
+      <div class="profile-value" id="pRole"></div>
+    </div>
+  </div>
+
+  <div style="margin-top:16px">
+    <button class="btn btn-outline" id="logoutBtn2">Đăng xuất khỏi hệ thống</button>
+  </div>
+</main>
+
+<script src="/js/icons.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+renderLayout('profile');
+const user = Api.getUser() || {};
+document.getElementById('pUsername').textContent = user.username || '—';
+document.getElementById('pFullName').textContent = user.full_name || '—';
+document.getElementById('pRole').textContent = user.role === 'admin' ? 'Quản trị viên (admin)' : 'Người dùng';
+document.getElementById('logoutBtn2').addEventListener('click', () => {
+  Api.clearSession();
+  window.location.href = '/login.html';
+});
+</script>
+</body>
+</html>

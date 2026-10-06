@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lịch sử Bật Tắt - IoT Monitor</title>
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body class="page">
+<header class="topbar" id="topbar"></header>
+<main class="main">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Lịch sử Bật Tắt</h1>
+      <p class="page-subtitle" id="todayLabel"></p>
+    </div>
+    <span class="conn-badge" id="connBadge"></span>
+  </div>
+
+  <div class="card">
+    <div class="table-title">
+      <div style="font-weight:700;font-size:15px">Lịch sử Bật Tắt</div>
+      <p class="page-subtitle" style="margin:2px 0 16px">Nhật ký thao tác bật/tắt các thiết bị (theo dõi PENDING / SUCCESS / FAIL / TIMEOUT)</p>
+    </div>
+
+    <div class="toolbar">
+      <select id="deviceFilter">
+        <option value="">Tất cả thiết bị</option>
+      </select>
+      <select id="actionFilter">
+        <option value="">Tất cả lệnh</option>
+        <option value="ON">ON</option>
+        <option value="OFF">OFF</option>
+      </select>
+      <select id="resultFilter">
+        <option value="">Tất cả trạng thái</option>
+        <option value="pending">PENDING</option>
+        <option value="ok">SUCCESS</option>
+        <option value="fail">FAIL</option>
+        <option value="timeout">TIMEOUT</option>
+      </select>
+      <div class="date-range">
+        <div class="field-icon" id="fromWrap"><input type="date" id="fromDate" /></div>
+        <span>–</span>
+        <div class="field-icon" id="toWrap"><input type="date" id="toDate" /></div>
+      </div>
+      <button class="btn btn-primary" id="refreshBtn"><span>Làm mới</span></button>
+    </div>
+
+    <div id="tableWrap"></div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+</main>
+
+<script src="/js/icons.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+renderLayout('history');
+document.getElementById('todayLabel').textContent = todayLabel();
+document.getElementById('fromWrap').insertAdjacentHTML('afterbegin', Icons.calendar);
+document.getElementById('toWrap').insertAdjacentHTML('afterbegin', Icons.calendar);
+document.getElementById('refreshBtn').insertAdjacentHTML('afterbegin', Icons.refresh);
+
+const state = { page: 1, size: 8, device: '', action: '', result: '', from: '', to: '', sort: 'time_desc' };
+
+function buildQuery() {
+  const p = new URLSearchParams();
+  p.set('page', state.page);
+  p.set('size', state.size);
+  p.set('sort', state.sort);
+  if (state.device) p.set('device', state.device);
+  if (state.action) p.set('action', state.action);
+  if (state.result) p.set('result', state.result);
+  if (state.from) p.set('from', state.from + ' 00:00:00');
+  if (state.to) p.set('to', state.to + ' 23:59:59');
+  return p.toString();
+}
+
+async function loadDeviceOptions() {
+  try {
+    const data = await Api.get('/api/devices');
+    const sel = document.getElementById('deviceFilter');
+    data.items.forEach((d) => {
+      const opt = document.createElement('option');
+      opt.value = d.device_key;
+      opt.textContent = d.device_name;
+      sel.appendChild(opt);
+    });
+  } catch {
+    // bo qua neu khong tai duoc danh sach thiet bi
+  }
+}
+
+function renderTable(items) {
+  const wrap = document.getElementById('tableWrap');
+  if (!items.length) {
+    wrap.innerHTML = '<div class="empty-state">Chưa có lịch sử hoạt động.</div>';
+    return;
+  }
+  wrap.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Tên thiết bị</th>
+          <th>Lệnh thao tác</th>
+          <th>Trạng thái thực thi</th>
+          <th class="sortable" data-sort="time">Thời gian</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items
+          .map(
+            (it) => `
+          <tr>
+            <td class="mono-id">${formatId(it.id)}</td>
+            <td>
+              <div style="font-weight:700">${escapeHtml(it.device_name)}</div>
+              <div class="note-cell">${escapeHtml(it.target)}${it.issued_by ? ' · ' + escapeHtml(it.issued_by) : ''}</div>
+            </td>
+            <td><span class="badge ${it.action === 'ON' ? 'on' : 'off'}">${escapeHtml(it.action)}</span></td>
+            <td>
+              <span class="badge ${it.result}">${resultBadgeLabel(it.result)}</span>
+              ${it.note ? `<div class="note-cell">${escapeHtml(it.note)}</div>` : ''}
+            </td>
+            <td>${formatTime(it.time)}</td>
+          </tr>`
+          )
+          .join('')}
+      </tbody>
+    </table>
+  `;
+  wrap.querySelectorAll('th.sortable').forEach((th) => {
+    th.addEventListener('click', () => {
+      state.sort = state.sort === 'time_desc' ? 'time_asc' : 'time_desc';
+      state.page = 1;
+      load();
+    });
+  });
+}
+
+async function load() {
+  try {
+    const data = await Api.get(`/api/device-actions?${buildQuery()}`);
+    renderTable(data.items);
+    renderPager(document.getElementById('pagination'), data, (p) => { state.page = p; load(); });
+    setConnection(true);
+  } catch (err) {
+    document.getElementById('tableWrap').innerHTML = `<div class="error-state">Không thể tải lịch sử hoạt động. Vui lòng thử lại sau. (${err.message})</div>`;
+    document.getElementById('pagination').innerHTML = '';
+    setConnection(false);
+  }
+}
+
+document.getElementById('deviceFilter').addEventListener('change', (e) => { state.device = e.target.value; state.page = 1; load(); });
+document.getElementById('actionFilter').addEventListener('change', (e) => { state.action = e.target.value; state.page = 1; load(); });
+document.getElementById('resultFilter').addEventListener('change', (e) => { state.result = e.target.value; state.page = 1; load(); });
+document.getElementById('fromDate').addEventListener('change', (e) => { state.from = e.target.value; state.page = 1; load(); });
+document.getElementById('toDate').addEventListener('change', (e) => { state.to = e.target.value; state.page = 1; load(); });
+document.getElementById('refreshBtn').addEventListener('click', load);
+
+loadDeviceOptions();
+load();
+</script>
+</body>
+</html>

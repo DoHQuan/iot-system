@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dashboard - IoT Monitor</title>
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body class="page">
+<header class="topbar" id="topbar"></header>
+<main class="main">
+  <div id="loadError" class="error-state" hidden></div>
+
+  <div class="grid cols-3" id="statCards"></div>
+
+  <div class="dash-grid">
+    <div class="card chart-card">
+      <div class="card-title">BIỂU ĐỒ TỔNG QUAN 24 GIỜ</div>
+      <div class="chart-legend" id="chartLegend"></div>
+      <canvas id="trendChart" height="130"></canvas>
+    </div>
+
+    <div class="card control-card">
+      <div class="card-title">
+        <span>ĐIỀU KHIỂN THIẾT BỊ</span>
+        <button class="icon-btn" id="refreshBtn" title="Làm mới"></button>
+      </div>
+      <div id="deviceControlList"></div>
+      <a class="btn btn-outline btn-block" href="/history.html">
+        <span>XEM LỊCH SỬ ĐIỀU KHIỂN</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="updated-footer">
+    <span id="updatedAt">Đang tải...</span>
+    <span id="refreshIcon"></span>
+  </div>
+</main>
+
+<script src="/js/vendor/chart.umd.min.js"></script>
+<script src="/js/icons.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+renderLayout('dashboard');
+document.getElementById('refreshBtn').innerHTML = Icons.refresh;
+document.getElementById('refreshIcon').innerHTML = Icons.refresh;
+document.querySelector('.control-card .btn-outline').innerHTML = Icons.list + '<span>XEM LỊCH SỬ ĐIỀU KHIỂN</span>';
+
+const TYPE_ORDER = ['temperature', 'light', 'humidity'];
+const TYPE_META = {
+  temperature: { icon: Icons.thermometer, cls: 'temp', color: '#ef4444', label: 'Nhiệt độ' },
+  light: { icon: Icons.sun, cls: 'light', color: '#f59e0b', label: 'Ánh sáng' },
+  humidity: { icon: Icons.droplet, cls: 'humidity', color: '#3b82f6', label: 'Độ ẩm' },
+};
+
+let chart;
+let controlBusy = false;
+
+function byTypeOrder(a, b) {
+  return TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type);
+}
+
+function statCard(item) {
+  const meta = TYPE_META[item.type] || {};
+  const value = item.value === null ? '—' : `${item.value}${item.unit ? item.unit : ''}`;
+  const range = item.min !== null && item.max !== null
+    ? `Cao nhất: ${item.max}${item.unit || ''} | Thấp nhất: ${item.min}${item.unit || ''}`
+    : 'Chưa có dữ liệu';
+  return `
+    <div class="card stat-card">
+      <div class="stat-icon ${meta.cls || ''}">${meta.icon || ''}</div>
+      <div>
+        <div class="stat-label">${escapeHtml(item.name)}</div>
+        <div class="stat-value">${value}</div>
+        <div class="stat-range">${range}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderLegend(series) {
+  document.getElementById('chartLegend').innerHTML = series
+    .map((s) => {
+      const meta = TYPE_META[s.type] || {};
+      return `<span class="legend-item"><span class="legend-dot" style="background:${meta.color || '#999'}"></span>${escapeHtml(s.name)} (${s.unit || ''})</span>`;
+    })
+    .join('');
+}
+
+function renderChart(series) {
+  const canvas = document.getElementById('trendChart');
+  const ctx = canvas.getContext('2d');
+
+  const labels = (series[0] ? series[0].points : []).map((p) => formatClock(p.timestamp));
+  const datasets = series.map((s) => {
+    const meta = TYPE_META[s.type] || {};
+    const axisMap = { temperature: 'yTemp', humidity: 'yHumidity', light: 'yLight' };
+    return {
+      label: s.name,
+      data: s.points.map((p) => p.value),
+      borderColor: meta.color || '#999',
+      backgroundColor: 'transparent',
+      tension: 0.35,
+      pointRadius: 0,
+      borderWidth: 2,
+      yAxisID: axisMap[s.type] || 'yTemp',
+    };
+  });
+
+  if (chart) {
+    chart.data.labels = labels;
+    chart.data.datasets = datasets;
+    chart.update('none');
+    return;
+  }
+
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      animation: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false } },
+      scales: {
+        yTemp: { position: 'left', ticks: { color: '#ef4444', font: { size: 10 } }, grid: { color: '#eef0f4' } },
+        yHumidity: { position: 'left', ticks: { color: '#3b82f6', font: { size: 10 } }, grid: { display: false } },
+        yLight: { position: 'right', ticks: { color: '#f59e0b', font: { size: 10 } }, grid: { display: false } },
+        x: { ticks: { font: { size: 10 }, maxRotation: 0 }, grid: { display: false } },
+      },
+    },
+  });
+}
+
+function renderDeviceControl(deviceStatus) {
+  const el = document.getElementById('deviceControlList');
+  if (!deviceStatus.length) {
+    el.innerHTML = '<div class="empty-state">Chưa có thiết bị nào.</div>';
+    return;
+  }
+  const LEDS = [
+    { target: 'led1', label: 'Đèn 1', stateKey: 'led1_state' },
+    { target: 'led2', label: 'Đèn 2', stateKey: 'led2_state' },
+    { target: 'led3', label: 'Đèn 3', stateKey: 'led3_state' },
+  ];
+
+  el.innerHTML = deviceStatus
+    .map((d) => {
+      const rows = LEDS.map((led) => {
+        const isOn = d[led.stateKey] === 'ON';
+        return `
+        <div class="device-item" data-device="${escapeHtml(d.device_id)}">
+          <div class="device-icon ${isOn ? 'on' : ''}">${Icons.bulb}</div>
+          <div class="device-info">
+            <div class="device-name">${led.label}</div>
+            <div class="device-sub">Thiết bị: ${escapeHtml(d.name)} (${escapeHtml(d.device_id)})</div>
+            <div class="device-status ${isOn ? 'on' : 'off'}"><span class="dot"></span>${isOn ? 'Đang bật' : 'Đang tắt'}</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" ${isOn ? 'checked' : ''} data-device="${escapeHtml(d.device_id)}" data-target="${led.target}" />
+            <span class="switch-track"></span>
+          </label>
+        </div>`;
+      }).join('');
+      return rows;
+    })
+    .join('');
+
+  el.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+    cb.addEventListener('change', () => sendControl(cb.dataset.device, cb.dataset.target, cb.checked ? 'ON' : 'OFF', cb));
+  });
+}
+
+async function sendControl(deviceId, target, action, checkbox) {
+  if (controlBusy) return;
+  controlBusy = true;
+  checkbox.disabled = true;
+  try {
+    await Api.post('/api/control', { device_id: deviceId, target, action });
+  } catch (err) {
+    checkbox.checked = !checkbox.checked; // revert on failure
+  } finally {
+    checkbox.disabled = false;
+    controlBusy = false;
+    load();
+  }
+}
+
+async function load() {
+  try {
+    const data = await Api.get('/api/dashboard?limit=30');
+    document.getElementById('loadError').hidden = true;
+
+    const sensors = [...data.latestSensors].sort(byTypeOrder);
+    const series = [...data.chartSeries].sort(byTypeOrder);
+
+    document.getElementById('statCards').innerHTML = sensors.map(statCard).join('');
+    renderLegend(series);
+    renderChart(series);
+
+    renderDeviceControl(data.deviceStatus);
+
+    document.getElementById('updatedAt').textContent = `Cập nhật cuối: ${formatTime(data.updatedAt)}`;
+  } catch (err) {
+    const box = document.getElementById('loadError');
+    box.hidden = false;
+    box.textContent = 'Không tải được dữ liệu Dashboard: ' + err.message;
+  }
+}
+
+document.getElementById('refreshBtn').addEventListener('click', load);
+load();
+setInterval(load, 4000);
+</script>
+</body>
+</html>
