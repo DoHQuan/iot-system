@@ -1,0 +1,2016 @@
+{
+	"info": {
+		"name": "IoT System API - Đỗ Hà Quân",
+		"description": "API Docs cho hệ thống IoT giám sát nhiệt độ, độ ẩm, ánh sáng và điều khiển 3 đèn LED qua ESP8266 + MQTT (Mosquitto).\n\n**Base URL:** `{{baseUrl}}` = `http://localhost:4000`\n\n**Xác thực:** gọi *Auth / Đăng nhập* trước. Token được tự lưu vào biến `token`; các API còn lại dùng header `Authorization: Bearer {{token}}` (cấu hình ở mức collection).\n\nSinh viên: Đỗ Hà Quân - B23DCAT245",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{token}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:4000"
+		},
+		{
+			"key": "token",
+			"value": ""
+		}
+	],
+	"item": [
+		{
+			"name": "0. Health check",
+			"item": [
+				{
+					"name": "Kiểm tra backend",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/health",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"health"
+							],
+							"query": []
+						},
+						"auth": {
+							"type": "noauth"
+						},
+						"description": "Kiểm tra backend đang chạy và trạng thái kết nối MySQL/MQTT. Không cần token."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/health",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"health"
+									],
+									"query": []
+								},
+								"auth": {
+									"type": "noauth"
+								},
+								"description": "Kiểm tra backend đang chạy và trạng thái kết nối MySQL/MQTT. Không cần token."
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"database\": true,\n  \"mqtt\": true,\n  \"time\": \"2026-10-21T13:53:34.775Z\"\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "1. Auth",
+			"item": [
+				{
+					"name": "Đăng nhập",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+									"const body = pm.response.json();",
+									"pm.test(\"Có token\", () => pm.expect(body.token).to.be.a(\"string\"));",
+									"pm.collectionVariables.set(\"token\", body.token);"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"auth": {
+							"type": "noauth"
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login"
+							],
+							"query": []
+						},
+						"description": "Đăng nhập, trả về JWT dùng cho các API còn lại.\n\n**Body (JSON):**\n| Trường | Kiểu | Bắt buộc | Mô tả |\n|---|---|---|---|\n| username | string | Có | Tên đăng nhập hoặc email |\n| password | string | Có | Mật khẩu (so khớp bcrypt) |\n\n**Mã lỗi:** 400 thiếu username/password · 401 sai tài khoản.\n\nScript ở tab *Tests* tự lưu `token` vào biến collection, các request khác dùng `Bearer {{token}}`."
+					},
+					"response": [
+						{
+							"name": "200 Đăng nhập thành công",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"auth": {
+									"type": "noauth"
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/api/auth/login",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"auth",
+										"login"
+									],
+									"query": []
+								},
+								"description": "Đăng nhập, trả về JWT dùng cho các API còn lại.\n\n**Body (JSON):**\n| Trường | Kiểu | Bắt buộc | Mô tả |\n|---|---|---|---|\n| username | string | Có | Tên đăng nhập hoặc email |\n| password | string | Có | Mật khẩu (so khớp bcrypt) |\n\n**Mã lỗi:** 400 thiếu username/password · 401 sai tài khoản.\n\nScript ở tab *Tests* tự lưu `token` vào biến collection, các request khác dùng `Bearer {{token}}`."
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImZ1bGxfbmFtZSI6IsSQ4buXIEjDoCBRdcOibiIsImlhdCI6MTc5MjU5MDgxNCwiZXhwIjoxNzkyNjE5NjE0fQ.rl0rgk7HEDxpxvO77ohiM_Vq9uf-pN8mz4rlCfDB8TM\",\n  \"user\": {\n    \"id\": 1,\n    \"username\": \"admin\",\n    \"email\": \"admin@iot.local\",\n    \"full_name\": \"Đỗ Hà Quân\",\n    \"role\": \"admin\"\n  }\n}"
+						},
+						{
+							"name": "401 Sai mật khẩu",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"auth": {
+									"type": "noauth"
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"username\": \"admin\",\n  \"password\": \"sai-mat-khau\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/api/auth/login",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"auth",
+										"login"
+									],
+									"query": []
+								},
+								"description": "Đăng nhập, trả về JWT dùng cho các API còn lại.\n\n**Body (JSON):**\n| Trường | Kiểu | Bắt buộc | Mô tả |\n|---|---|---|---|\n| username | string | Có | Tên đăng nhập hoặc email |\n| password | string | Có | Mật khẩu (so khớp bcrypt) |\n\n**Mã lỗi:** 400 thiếu username/password · 401 sai tài khoản.\n\nScript ở tab *Tests* tự lưu `token` vào biến collection, các request khác dùng `Bearer {{token}}`."
+							},
+							"status": "Unauthorized",
+							"code": 401,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"message\": \"Sai tên đăng nhập hoặc mật khẩu\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Thông tin người dùng",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/me",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"me"
+							],
+							"query": []
+						},
+						"description": "Thông tin người dùng đang đăng nhập (lấy từ JWT). Lỗi 401 nếu thiếu/hết hạn token."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/auth/me",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"auth",
+										"me"
+									],
+									"query": []
+								},
+								"description": "Thông tin người dùng đang đăng nhập (lấy từ JWT). Lỗi 401 nếu thiếu/hết hạn token."
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"user\": {\n    \"id\": 1,\n    \"username\": \"admin\",\n    \"email\": \"admin@iot.local\",\n    \"full_name\": \"Đỗ Hà Quân\",\n    \"role\": \"admin\"\n  }\n}"
+						},
+						{
+							"name": "401 Thiếu token",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/auth/me",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"auth",
+										"me"
+									],
+									"query": []
+								},
+								"description": "Thông tin người dùng đang đăng nhập (lấy từ JWT). Lỗi 401 nếu thiếu/hết hạn token.",
+								"auth": {
+									"type": "noauth"
+								}
+							},
+							"status": "Unauthorized",
+							"code": 401,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"message\": \"Thiếu token xác thực\"\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "2. Dashboard",
+			"item": [
+				{
+					"name": "Lấy dữ liệu Dashboard",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+									"pm.test(\"Có latestSensors\", () => pm.expect(pm.response.json().latestSensors).to.be.an(\"array\"));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/dashboard?limit=30",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"dashboard"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "30",
+									"description": "Số điểm tối đa của biểu đồ (mặc định 30, tối đa 500)"
+								},
+								{
+									"key": "device_id",
+									"value": "esp8266-01",
+									"description": "id hoặc device_key; bỏ trống = thiết bị đầu tiên",
+									"disabled": true
+								},
+								{
+									"key": "from",
+									"value": "2026-10-21 00:00",
+									"description": "Bắt đầu khoảng thời gian (UTC). Mặc định 24 giờ trước",
+									"disabled": true
+								},
+								{
+									"key": "to",
+									"value": "2026-10-21 23:59",
+									"description": "Kết thúc khoảng thời gian (UTC)",
+									"disabled": true
+								},
+								{
+									"key": "interval",
+									"value": "60",
+									"description": "Gộp điểm theo N giây (lấy trung bình)",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Dữ liệu tổng quan cho Dashboard: giá trị cảm biến mới nhất (kèm min/max), chuỗi dữ liệu biểu đồ và trạng thái 3 đèn của từng thiết bị. Chỉ đọc dữ liệu (SELECT data_sensor JOIN sensors, devices).\n\n**Response:** `latestSensors[]`, `chartSeries[]`, `deviceStatus[]`, `updatedAt`."
+					},
+					"response": [
+						{
+							"name": "200 OK (limit=5)",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/dashboard?limit=5",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"dashboard"
+									],
+									"query": [
+										{
+											"key": "limit",
+											"value": "5"
+										}
+									]
+								},
+								"description": "Dữ liệu tổng quan cho Dashboard: giá trị cảm biến mới nhất (kèm min/max), chuỗi dữ liệu biểu đồ và trạng thái 3 đèn của từng thiết bị. Chỉ đọc dữ liệu (SELECT data_sensor JOIN sensors, devices).\n\n**Response:** `latestSensors[]`, `chartSeries[]`, `deviceStatus[]`, `updatedAt`."
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"latestSensors\": [\n    {\n      \"sensor_id\": 1,\n      \"type\": \"temperature\",\n      \"name\": \"Nhiệt độ\",\n      \"unit\": \"°C\",\n      \"value\": 30.5,\n      \"min\": 29.7,\n      \"max\": 30.5,\n      \"timestamp\": \"2026-10-21 13:53:33\"\n    },\n    {\n      \"sensor_id\": 2,\n      \"type\": \"humidity\",\n      \"name\": \"Độ ẩm\",\n      \"unit\": \"%\",\n      \"value\": 69.3,\n      \"min\": 69,\n      \"max\": 71.9,\n      \"timestamp\": \"2026-10-21 13:53:33\"\n    },\n    {\n      \"sensor_id\": 3,\n      \"type\": \"light\",\n      \"name\": \"Ánh sáng\",\n      \"unit\": \"\",\n      \"value\": 13,\n      \"min\": 5,\n      \"max\": 55,\n      \"timestamp\": \"2026-10-21 13:53:33\"\n    }\n  ],\n  \"chartSeries\": [\n    {\n      \"sensor_id\": 1,\n      \"type\": \"temperature\",\n      \"name\": \"Nhiệt độ\",\n      \"unit\": \"°C\",\n      \"points\": [\n        {\n          \"timestamp\": \"2026-10-21 13:53:25\",\n          \"value\": 30.5\n        },\n        {\n          \"timestamp\": \"2026-10-21 13:53:27\",\n          \"value\": 30.5\n        },\n        {\n          \"timestamp\": \"2026-10-21 13:53:29\",\n          \"value\": 30.5\n        }\n      ]\n    },\n    {\n      \"sensor_id\": 2,\n      \"type\": \"humidity\",\n      \"name\": \"Độ ẩm\",\n      \"unit\": \"%\",\n      \"points\": [\n        {\n          \"timestamp\": \"2026-10-21 13:53:25\",\n          \"value\": 69.6\n        },\n        {\n          \"timestamp\": \"2026-10-21 13:53:27\",\n          \"value\": 69.6\n        },\n        {\n          \"timestamp\": \"2026-10-21 13:53:29\",\n          \"value\": 69.5\n        }\n      ]\n    },\n    {\n      \"sensor_id\": 3,\n      \"type\": \"light\",\n      \"name\": \"Ánh sáng\",\n      \"unit\": \"\",\n      \"points\": [\n        {\n          \"timestamp\": \"2026-10-21 13:53:25\",\n          \"value\": 25\n        },\n        {\n          \"timestamp\": \"2026-10-21 13:53:27\",\n          \"value\": 24\n        },\n        {\n          \"timestamp\": \"2026-10-21 13:53:29\",\n          \"value\": 20\n        }\n      ]\n    }\n  ],\n  \"deviceStatus\": [\n    {\n      \"id\": 1,\n      \"device_id\": \"esp8266-01\",\n      \"name\": \"ESP8266\",\n      \"status\": \"online\",\n      \"led1_state\": \"OFF\",\n      \"led2_state\": \"OFF\",\n      \"led3_state\": \"OFF\"\n    }\n  ],\n  \"updatedAt\": \"2026-10-21 13:53:33\"\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "3. Thiết bị",
+			"item": [
+				{
+					"name": "Danh sách thiết bị",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/devices",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"devices"
+							],
+							"query": []
+						},
+						"description": "Danh sách thiết bị kèm cảm biến gắn trên thiết bị và trạng thái led1/led2/led3."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/devices",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"devices"
+									],
+									"query": []
+								},
+								"description": "Danh sách thiết bị kèm cảm biến gắn trên thiết bị và trạng thái led1/led2/led3."
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"items\": [\n    {\n      \"id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"device_type\": \"ESP8266\",\n      \"status\": \"online\",\n      \"description\": \"NodeMCU ESP8266: DHT11 (D4), LDR (A0), Đèn 1-3 (D5, D6, D7)\",\n      \"created_at\": \"2026-10-18 16:15:51\",\n      \"updated_at\": \"2026-10-21 13:47:35\",\n      \"sensors\": [\n        {\n          \"id\": 1,\n          \"device_id\": 1,\n          \"sensor_name\": \"Nhiệt độ\",\n          \"sensor_type\": \"temperature\",\n          \"unit\": \"°C\"\n        },\n        {\n          \"id\": 2,\n          \"device_id\": 1,\n          \"sensor_name\": \"Độ ẩm\",\n          \"sensor_type\": \"humidity\",\n          \"unit\": \"%\"\n        },\n        {\n          \"id\": 3,\n          \"device_id\": 1,\n          \"sensor_name\": \"Ánh sáng\",\n          \"sensor_type\": \"light\",\n          \"unit\": \"\"\n        }\n      ],\n      \"leds\": {\n        \"led1\": \"OFF\",\n        \"led2\": \"OFF\",\n        \"led3\": \"OFF\"\n      }\n    }\n  ],\n  \"total\": 1\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "4. Dữ liệu cảm biến",
+			"item": [
+				{
+					"name": "Lịch sử dữ liệu cảm biến",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+									"pm.test(\"Có phân trang\", () => pm.expect(pm.response.json()).to.include.keys(\"items\",\"total\",\"page\",\"size\"));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/sensor-data?page=1&size=10&sort=time_desc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sensor-data"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Trang (mặc định 1)"
+								},
+								{
+									"key": "size",
+									"value": "10",
+									"description": "Số bản ghi mỗi trang (mặc định 10, tối đa 100)"
+								},
+								{
+									"key": "sort",
+									"value": "time_desc",
+									"description": "time_desc | time_asc | value_desc | value_asc | id_desc | id_asc"
+								},
+								{
+									"key": "type",
+									"value": "temperature",
+									"description": "temperature | humidity | light | random_10 | random_100 | random_1000",
+									"disabled": true
+								},
+								{
+									"key": "value",
+									"value": ">25",
+									"description": "Lọc giá trị: 25.5, >30, <=20 ...",
+									"disabled": true
+								},
+								{
+									"key": "search",
+									"value": "Nhiệt",
+									"description": "Tìm theo tên cảm biến/thiết bị",
+									"disabled": true
+								},
+								{
+									"key": "time",
+									"value": "21/10/2026 20:45",
+									"description": "Tìm theo thời gian hiển thị (giờ VN)",
+									"disabled": true
+								},
+								{
+									"key": "from",
+									"value": "2026-10-21 00:00",
+									"description": "Từ thời điểm (UTC)",
+									"disabled": true
+								},
+								{
+									"key": "to",
+									"value": "2026-10-21 23:59",
+									"description": "Đến thời điểm (UTC)",
+									"disabled": true
+								},
+								{
+									"key": "device_id",
+									"value": "esp8266-01",
+									"description": "Lọc theo thiết bị",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Lịch sử dữ liệu cảm biến, hỗ trợ lọc, tìm kiếm, sắp xếp và phân trang. Mỗi dòng là một giá trị đo của một sensor.\n\n**Response:** `{ items[], total, page, size }`.\n\n**Mã lỗi:** 400 tham số type/value/from/to không hợp lệ."
+					},
+					"response": [
+						{
+							"name": "200 Trang 1, 5 bản ghi",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/sensor-data?page=1&size=5&sort=time_desc",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"sensor-data"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "size",
+											"value": "5"
+										},
+										{
+											"key": "sort",
+											"value": "time_desc"
+										}
+									]
+								},
+								"description": "Lịch sử dữ liệu cảm biến, hỗ trợ lọc, tìm kiếm, sắp xếp và phân trang. Mỗi dòng là một giá trị đo của một sensor.\n\n**Response:** `{ items[], total, page, size }`.\n\n**Mã lỗi:** 400 tham số type/value/from/to không hợp lệ."
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"items\": [\n    {\n      \"id\": 810,\n      \"sensor_id\": 3,\n      \"sensor_name\": \"Ánh sáng\",\n      \"sensor_type\": \"light\",\n      \"value\": 13,\n      \"unit\": \"\",\n      \"time\": \"2026-10-21 13:53:33\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 809,\n      \"sensor_id\": 2,\n      \"sensor_name\": \"Độ ẩm\",\n      \"sensor_type\": \"humidity\",\n      \"value\": 69.3,\n      \"unit\": \"%\",\n      \"time\": \"2026-10-21 13:53:33\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 808,\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Nhiệt độ\",\n      \"sensor_type\": \"temperature\",\n      \"value\": 30.5,\n      \"unit\": \"°C\",\n      \"time\": \"2026-10-21 13:53:33\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    }\n  ],\n  \"total\": 810,\n  \"page\": 1,\n  \"size\": 5\n}"
+						},
+						{
+							"name": "200 Lọc nhiệt độ > 25",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/sensor-data?type=temperature&value=>25&page=1&size=5",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"sensor-data"
+									],
+									"query": [
+										{
+											"key": "type",
+											"value": "temperature"
+										},
+										{
+											"key": "value",
+											"value": ">25"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "size",
+											"value": "5"
+										}
+									]
+								},
+								"description": "Lịch sử dữ liệu cảm biến, hỗ trợ lọc, tìm kiếm, sắp xếp và phân trang. Mỗi dòng là một giá trị đo của một sensor.\n\n**Response:** `{ items[], total, page, size }`.\n\n**Mã lỗi:** 400 tham số type/value/from/to không hợp lệ."
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"items\": [\n    {\n      \"id\": 808,\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Nhiệt độ\",\n      \"sensor_type\": \"temperature\",\n      \"value\": 30.5,\n      \"unit\": \"°C\",\n      \"time\": \"2026-10-21 13:53:33\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 805,\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Nhiệt độ\",\n      \"sensor_type\": \"temperature\",\n      \"value\": 30.5,\n      \"unit\": \"°C\",\n      \"time\": \"2026-10-21 13:53:31\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 802,\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Nhiệt độ\",\n      \"sensor_type\": \"temperature\",\n      \"value\": 30.5,\n      \"unit\": \"°C\",\n      \"time\": \"2026-10-21 13:53:29\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    }\n  ],\n  \"total\": 270,\n  \"page\": 1,\n  \"size\": 5\n}"
+						},
+						{
+							"name": "400 Tham số type sai",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/sensor-data?type=abc",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"sensor-data"
+									],
+									"query": [
+										{
+											"key": "type",
+											"value": "abc"
+										}
+									]
+								},
+								"description": "Lịch sử dữ liệu cảm biến, hỗ trợ lọc, tìm kiếm, sắp xếp và phân trang. Mỗi dòng là một giá trị đo của một sensor.\n\n**Response:** `{ items[], total, page, size }`.\n\n**Mã lỗi:** 400 tham số type/value/from/to không hợp lệ."
+							},
+							"status": "Bad Request",
+							"code": 400,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"message\": \"Tham số type không hợp lệ\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Phân trang - Trang 2 (5 bản ghi/trang)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/sensor-data?page=2&size=5&sort=time_desc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sensor-data"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "2"
+								},
+								{
+									"key": "size",
+									"value": "5"
+								},
+								{
+									"key": "sort",
+									"value": "time_desc"
+								}
+							]
+						},
+						"description": "Lấy trang thứ 2, mỗi trang 5 bản ghi → trả về bản ghi thứ 6–10 (offset = (page - 1) × size)."
+					},
+					"response": [
+						{
+							"name": "200 Trang 2 (5 bản ghi/trang)",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/sensor-data?page=2&size=5&sort=time_desc",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"sensor-data"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "2"
+										},
+										{
+											"key": "size",
+											"value": "5"
+										},
+										{
+											"key": "sort",
+											"value": "time_desc"
+										}
+									]
+								},
+								"description": "Lấy trang thứ 2, mỗi trang 5 bản ghi → trả về bản ghi thứ 6–10 (offset = (page - 1) × size)."
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"items\": [\n    {\n      \"id\": 21715,\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Nhiệt độ\",\n      \"sensor_type\": \"temperature\",\n      \"value\": 29.5,\n      \"unit\": \"°C\",\n      \"time\": \"2026-10-29 01:18:50\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21714,\n      \"sensor_id\": 3,\n      \"sensor_name\": \"Ánh sáng\",\n      \"sensor_type\": \"light\",\n      \"value\": 9,\n      \"unit\": \"\",\n      \"time\": \"2026-10-29 01:18:48\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21713,\n      \"sensor_id\": 2,\n      \"sensor_name\": \"Độ ẩm\",\n      \"sensor_type\": \"humidity\",\n      \"value\": 70.3,\n      \"unit\": \"%\",\n      \"time\": \"2026-10-29 01:18:48\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21712,\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Nhiệt độ\",\n      \"sensor_type\": \"temperature\",\n      \"value\": 29.5,\n      \"unit\": \"°C\",\n      \"time\": \"2026-10-29 01:18:48\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21711,\n      \"sensor_id\": 3,\n      \"sensor_name\": \"Ánh sáng\",\n      \"sensor_type\": \"light\",\n      \"value\": 5,\n      \"unit\": \"\",\n      \"time\": \"2026-10-29 01:18:46\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    }\n  ],\n  \"total\": 21720,\n  \"page\": 2,\n  \"size\": 5\n}"
+						}
+					]
+				},
+				{
+					"name": "Phân trang - Trang 1 (20 bản ghi/trang)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/sensor-data?page=1&size=20&sort=time_desc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sensor-data"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "size",
+									"value": "20"
+								},
+								{
+									"key": "sort",
+									"value": "time_desc"
+								}
+							]
+						},
+						"description": "Đổi kích thước trang: mỗi trang 20 bản ghi."
+					},
+					"response": [
+						{
+							"name": "200 Trang 1 (20 bản ghi/trang)",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/sensor-data?page=1&size=20&sort=time_desc",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"sensor-data"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "size",
+											"value": "20"
+										},
+										{
+											"key": "sort",
+											"value": "time_desc"
+										}
+									]
+								},
+								"description": "Đổi kích thước trang: mỗi trang 20 bản ghi."
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"items\": [\n    {\n      \"id\": 21720,\n      \"sensor_id\": 3,\n      \"sensor_name\": \"Ánh sáng\",\n      \"sensor_type\": \"light\",\n      \"value\": 7,\n      \"unit\": \"\",\n      \"time\": \"2026-10-29 01:18:53\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21719,\n      \"sensor_id\": 2,\n      \"sensor_name\": \"Độ ẩm\",\n      \"sensor_type\": \"humidity\",\n      \"value\": 70.3,\n      \"unit\": \"%\",\n      \"time\": \"2026-10-29 01:18:53\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21718,\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Nhiệt độ\",\n      \"sensor_type\": \"temperature\",\n      \"value\": 29.5,\n      \"unit\": \"°C\",\n      \"time\": \"2026-10-29 01:18:53\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21717,\n      \"sensor_id\": 3,\n      \"sensor_name\": \"Ánh sáng\",\n      \"sensor_type\": \"light\",\n      \"value\": 1,\n      \"unit\": \"\",\n      \"time\": \"2026-10-29 01:18:50\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21716,\n      \"sensor_id\": 2,\n      \"sensor_name\": \"Độ ẩm\",\n      \"sensor_type\": \"humidity\",\n      \"value\": 70.3,\n      \"unit\": \"%\",\n      \"time\": \"2026-10-29 01:18:50\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21715,\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Nhiệt độ\",\n      \"sensor_type\": \"temperature\",\n      \"value\": 29.5,\n      \"unit\": \"°C\",\n      \"time\": \"2026-10-29 01:18:50\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21714,\n      \"sensor_id\": 3,\n      \"sensor_name\": \"Ánh sáng\",\n      \"sensor_type\": \"light\",\n      \"value\": 9,\n      \"unit\": \"\",\n      \"time\": \"2026-10-29 01:18:48\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21713,\n      \"sensor_id\": 2,\n      \"sensor_name\": \"Độ ẩm\",\n      \"sensor_type\": \"humidity\",\n      \"value\": 70.3,\n      \"unit\": \"%\",\n      \"time\": \"2026-10-29 01:18:48\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21712,\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Nhiệt độ\",\n      \"sensor_type\": \"temperature\",\n      \"value\": 29.5,\n      \"unit\": \"°C\",\n      \"time\": \"2026-10-29 01:18:48\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21711,\n      \"sensor_id\": 3,\n      \"sensor_name\": \"Ánh sáng\",\n      \"sensor_type\": \"light\",\n      \"value\": 5,\n      \"unit\": \"\",\n      \"time\": \"2026-10-29 01:18:46\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21710,\n      \"sensor_id\": 2,\n      \"sensor_name\": \"Độ ẩm\",\n      \"sensor_type\": \"humidity\",\n      \"value\": 70.1,\n      \"unit\": \"%\",\n      \"time\": \"2026-10-29 01:18:46\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21709,\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Nhiệt độ\",\n      \"sensor_type\": \"temperature\",\n      \"value\": 29.5,\n      \"unit\": \"°C\",\n      \"time\": \"2026-10-29 01:18:46\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21708,\n      \"sensor_id\": 3,\n      \"sensor_name\": \"Ánh sáng\",\n      \"sensor_type\": \"light\",\n      \"value\": 2,\n      \"unit\": \"\",\n      \"time\": \"2026-10-29 01:18:45\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21707,\n      \"sensor_id\": 2,\n      \"sensor_name\": \"Độ ẩm\",\n      \"sensor_type\": \"humidity\",\n      \"value\": 70.1,\n      \"unit\": \"%\",\n      \"time\": \"2026-10-29 01:18:45\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21706,\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Nhiệt độ\",\n      \"sensor_type\": \"temperature\",\n      \"value\": 29.5,\n      \"unit\": \"°C\",\n      \"time\": \"2026-10-29 01:18:45\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21705,\n      \"sensor_id\": 3,\n      \"sensor_name\": \"Ánh sáng\",\n      \"sensor_type\": \"light\",\n      \"value\": 6,\n      \"unit\": \"\",\n      \"time\": \"2026-10-29 01:18:43\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21704,\n      \"sensor_id\": 2,\n      \"sensor_name\": \"Độ ẩm\",\n      \"sensor_type\": \"humidity\",\n      \"value\": 70.1,\n      \"unit\": \"%\",\n      \"time\": \"2026-10-29 01:18:43\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21703,\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Nhiệt độ\",\n      \"sensor_type\": \"temperature\",\n      \"value\": 29.5,\n      \"unit\": \"°C\",\n      \"time\": \"2026-10-29 01:18:43\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21702,\n      \"sensor_id\": 3,\n      \"sensor_name\": \"Ánh sáng\",\n      \"sensor_type\": \"light\",\n      \"value\": 7,\n      \"unit\": \"\",\n      \"time\": \"2026-10-29 01:18:41\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21701,\n      \"sensor_id\": 2,\n      \"sensor_name\": \"Độ ẩm\",\n      \"sensor_type\": \"humidity\",\n      \"value\": 70.1,\n      \"unit\": \"%\",\n      \"time\": \"2026-10-29 01:18:41\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    }\n  ],\n  \"total\": 21720,\n  \"page\": 1,\n  \"size\": 20\n}"
+						}
+					]
+				},
+				{
+					"name": "Phân trang + Lọc nhiệt độ (trang 2)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/sensor-data?page=2&size=5&sort=time_desc&type=temperature",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sensor-data"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "2"
+								},
+								{
+									"key": "size",
+									"value": "5"
+								},
+								{
+									"key": "sort",
+									"value": "time_desc"
+								},
+								{
+									"key": "type",
+									"value": "temperature"
+								}
+							]
+						},
+						"description": "Kết hợp lọc và phân trang: `total` là tổng số bản ghi sau khi lọc, dùng để tính số trang = ceil(total / size)."
+					},
+					"response": [
+						{
+							"name": "200 Lọc nhiệt độ (trang 2)",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/sensor-data?page=2&size=5&sort=time_desc&type=temperature",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"sensor-data"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "2"
+										},
+										{
+											"key": "size",
+											"value": "5"
+										},
+										{
+											"key": "sort",
+											"value": "time_desc"
+										},
+										{
+											"key": "type",
+											"value": "temperature"
+										}
+									]
+								},
+								"description": "Kết hợp lọc và phân trang: `total` là tổng số bản ghi sau khi lọc, dùng để tính số trang = ceil(total / size)."
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"items\": [\n    {\n      \"id\": 21703,\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Nhiệt độ\",\n      \"sensor_type\": \"temperature\",\n      \"value\": 29.5,\n      \"unit\": \"°C\",\n      \"time\": \"2026-10-29 01:18:43\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21700,\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Nhiệt độ\",\n      \"sensor_type\": \"temperature\",\n      \"value\": 29.5,\n      \"unit\": \"°C\",\n      \"time\": \"2026-10-29 01:18:41\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21697,\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Nhiệt độ\",\n      \"sensor_type\": \"temperature\",\n      \"value\": 29.5,\n      \"unit\": \"°C\",\n      \"time\": \"2026-10-29 01:18:40\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21694,\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Nhiệt độ\",\n      \"sensor_type\": \"temperature\",\n      \"value\": 29.5,\n      \"unit\": \"°C\",\n      \"time\": \"2026-10-29 01:18:36\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21691,\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Nhiệt độ\",\n      \"sensor_type\": \"temperature\",\n      \"value\": 29.5,\n      \"unit\": \"°C\",\n      \"time\": \"2026-10-29 01:18:35\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    }\n  ],\n  \"total\": 7240,\n  \"page\": 2,\n  \"size\": 5\n}"
+						}
+					]
+				},
+				{
+					"name": "Phân trang - Tham số không hợp lệ",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/sensor-data?page=0&size=abc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sensor-data"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "abc"
+								}
+							]
+						},
+						"description": "`page`/`size` không hợp lệ → dùng giá trị mặc định page = 1, size = 10 (không báo lỗi). `size` tối đa 100."
+					},
+					"response": [
+						{
+							"name": "200 Tham số không hợp lệ",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/sensor-data?page=0&size=abc",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"sensor-data"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "0"
+										},
+										{
+											"key": "size",
+											"value": "abc"
+										}
+									]
+								},
+								"description": "`page`/`size` không hợp lệ → dùng giá trị mặc định page = 1, size = 10 (không báo lỗi). `size` tối đa 100."
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"items\": [\n    {\n      \"id\": 21720,\n      \"sensor_id\": 3,\n      \"sensor_name\": \"Ánh sáng\",\n      \"sensor_type\": \"light\",\n      \"value\": 7,\n      \"unit\": \"\",\n      \"time\": \"2026-10-29 01:18:53\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21719,\n      \"sensor_id\": 2,\n      \"sensor_name\": \"Độ ẩm\",\n      \"sensor_type\": \"humidity\",\n      \"value\": 70.3,\n      \"unit\": \"%\",\n      \"time\": \"2026-10-29 01:18:53\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21718,\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Nhiệt độ\",\n      \"sensor_type\": \"temperature\",\n      \"value\": 29.5,\n      \"unit\": \"°C\",\n      \"time\": \"2026-10-29 01:18:53\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21717,\n      \"sensor_id\": 3,\n      \"sensor_name\": \"Ánh sáng\",\n      \"sensor_type\": \"light\",\n      \"value\": 1,\n      \"unit\": \"\",\n      \"time\": \"2026-10-29 01:18:50\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21716,\n      \"sensor_id\": 2,\n      \"sensor_name\": \"Độ ẩm\",\n      \"sensor_type\": \"humidity\",\n      \"value\": 70.3,\n      \"unit\": \"%\",\n      \"time\": \"2026-10-29 01:18:50\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21715,\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Nhiệt độ\",\n      \"sensor_type\": \"temperature\",\n      \"value\": 29.5,\n      \"unit\": \"°C\",\n      \"time\": \"2026-10-29 01:18:50\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21714,\n      \"sensor_id\": 3,\n      \"sensor_name\": \"Ánh sáng\",\n      \"sensor_type\": \"light\",\n      \"value\": 9,\n      \"unit\": \"\",\n      \"time\": \"2026-10-29 01:18:48\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21713,\n      \"sensor_id\": 2,\n      \"sensor_name\": \"Độ ẩm\",\n      \"sensor_type\": \"humidity\",\n      \"value\": 70.3,\n      \"unit\": \"%\",\n      \"time\": \"2026-10-29 01:18:48\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21712,\n      \"sensor_id\": 1,\n      \"sensor_name\": \"Nhiệt độ\",\n      \"sensor_type\": \"temperature\",\n      \"value\": 29.5,\n      \"unit\": \"°C\",\n      \"time\": \"2026-10-29 01:18:48\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    },\n    {\n      \"id\": 21711,\n      \"sensor_id\": 3,\n      \"sensor_name\": \"Ánh sáng\",\n      \"sensor_type\": \"light\",\n      \"value\": 5,\n      \"unit\": \"\",\n      \"time\": \"2026-10-29 01:18:46\",\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\"\n    }\n  ],\n  \"total\": 21720,\n  \"page\": 1,\n  \"size\": 10\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "5. Điều khiển thiết bị",
+			"item": [
+				{
+					"name": "Bật Đèn 1",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Có cmd_id và result\", () => { const d = pm.response.json(); pm.expect(d).to.have.property(\"cmd_id\"); pm.expect([\"ok\",\"pending\",\"fail\",\"timeout\"]).to.include(d.result); });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"device_id\": 1,\n  \"target\": \"led1\",\n  \"action\": \"ON\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/control",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"control"
+							],
+							"query": []
+						},
+						"description": "Bật/tắt đèn trên ESP8266.\n\n**Luồng:** INSERT device_actions (result = pending) → publish lệnh lên topic `devicecontrol` (VD `LED1_ON`) → chờ ESP phản hồi trên `deviceresponse` → UPDATE result.\n\n**Body (JSON):**\n| Trường | Kiểu | Bắt buộc | Mô tả |\n|---|---|---|---|\n| device_id | number/string | Có | id hoặc device_key (`esp8266-01`) |\n| target | string | Có | led1 · led2 · led3 · all |\n| action | string | Có | ON · OFF |\n\n**Kết quả:** 200 `result: \"ok\"` · 202 `result: \"pending\"` (thiết bị mất kết nối, giữ pending; khi thiết bị kết nối lại, lệnh chuyển thành `fail`) · 502 `result: \"fail\"` (thiết bị từ chối) · 504 `result: \"timeout\"` (thiết bị vẫn hoạt động nhưng không phản hồi) · 400 tham số sai · 404 không thấy thiết bị."
+					},
+					"response": [
+						{
+							"name": "200 Bật Đèn 1",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"device_id\": 1,\n  \"target\": \"led1\",\n  \"action\": \"ON\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/api/control",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"control"
+									],
+									"query": []
+								},
+								"description": "Bật/tắt đèn trên ESP8266.\n\n**Luồng:** INSERT device_actions (result = pending) → publish lệnh lên topic `devicecontrol` (VD `LED1_ON`) → chờ ESP phản hồi trên `deviceresponse` → UPDATE result.\n\n**Body (JSON):**\n| Trường | Kiểu | Bắt buộc | Mô tả |\n|---|---|---|---|\n| device_id | number/string | Có | id hoặc device_key (`esp8266-01`) |\n| target | string | Có | led1 · led2 · led3 · all |\n| action | string | Có | ON · OFF |\n\n**Kết quả:** 200 `result: \"ok\"` · 202 `result: \"pending\"` (thiết bị mất kết nối, giữ pending; khi thiết bị kết nối lại, lệnh chuyển thành `fail`) · 502 `result: \"fail\"` (thiết bị từ chối) · 504 `result: \"timeout\"` (thiết bị vẫn hoạt động nhưng không phản hồi) · 400 tham số sai · 404 không thấy thiết bị."
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"cmd_id\": 33,\n  \"result\": \"ok\",\n  \"device_id\": 1,\n  \"device_key\": \"esp8266-01\",\n  \"target\": \"led1\",\n  \"action\": \"ON\",\n  \"command\": \"LED1_ON\",\n  \"leds\": {\n    \"led1\": \"ON\",\n    \"led2\": \"OFF\",\n    \"led3\": \"OFF\"\n  }\n}"
+						},
+						{
+							"name": "400 target sai",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"device_id\": 1,\n  \"target\": \"led9\",\n  \"action\": \"ON\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/api/control",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"control"
+									],
+									"query": []
+								},
+								"description": "Bật/tắt đèn trên ESP8266.\n\n**Luồng:** INSERT device_actions (result = pending) → publish lệnh lên topic `devicecontrol` (VD `LED1_ON`) → chờ ESP phản hồi trên `deviceresponse` → UPDATE result.\n\n**Body (JSON):**\n| Trường | Kiểu | Bắt buộc | Mô tả |\n|---|---|---|---|\n| device_id | number/string | Có | id hoặc device_key (`esp8266-01`) |\n| target | string | Có | led1 · led2 · led3 · all |\n| action | string | Có | ON · OFF |\n\n**Kết quả:** 200 `result: \"ok\"` · 202 `result: \"pending\"` (thiết bị mất kết nối, giữ pending; khi thiết bị kết nối lại, lệnh chuyển thành `fail`) · 502 `result: \"fail\"` (thiết bị từ chối) · 504 `result: \"timeout\"` (thiết bị vẫn hoạt động nhưng không phản hồi) · 400 tham số sai · 404 không thấy thiết bị."
+							},
+							"status": "Bad Request",
+							"code": 400,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"message\": \"target phải là led1, led2, led3 hoặc all\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Tắt Đèn 1",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Có cmd_id và result\", () => { const d = pm.response.json(); pm.expect(d).to.have.property(\"cmd_id\"); pm.expect([\"ok\",\"pending\",\"fail\",\"timeout\"]).to.include(d.result); });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"device_id\": 1,\n  \"target\": \"led1\",\n  \"action\": \"OFF\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/control",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"control"
+							],
+							"query": []
+						},
+						"description": "Bật/tắt đèn trên ESP8266.\n\n**Luồng:** INSERT device_actions (result = pending) → publish lệnh lên topic `devicecontrol` (VD `LED1_ON`) → chờ ESP phản hồi trên `deviceresponse` → UPDATE result.\n\n**Body (JSON):**\n| Trường | Kiểu | Bắt buộc | Mô tả |\n|---|---|---|---|\n| device_id | number/string | Có | id hoặc device_key (`esp8266-01`) |\n| target | string | Có | led1 · led2 · led3 · all |\n| action | string | Có | ON · OFF |\n\n**Kết quả:** 200 `result: \"ok\"` · 202 `result: \"pending\"` (thiết bị mất kết nối, giữ pending; khi thiết bị kết nối lại, lệnh chuyển thành `fail`) · 502 `result: \"fail\"` (thiết bị từ chối) · 504 `result: \"timeout\"` (thiết bị vẫn hoạt động nhưng không phản hồi) · 400 tham số sai · 404 không thấy thiết bị."
+					},
+					"response": []
+				},
+				{
+					"name": "Bật Đèn 2",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Có cmd_id và result\", () => { const d = pm.response.json(); pm.expect(d).to.have.property(\"cmd_id\"); pm.expect([\"ok\",\"pending\",\"fail\",\"timeout\"]).to.include(d.result); });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"device_id\": 1,\n  \"target\": \"led2\",\n  \"action\": \"ON\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/control",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"control"
+							],
+							"query": []
+						},
+						"description": "Bật/tắt đèn trên ESP8266.\n\n**Luồng:** INSERT device_actions (result = pending) → publish lệnh lên topic `devicecontrol` (VD `LED1_ON`) → chờ ESP phản hồi trên `deviceresponse` → UPDATE result.\n\n**Body (JSON):**\n| Trường | Kiểu | Bắt buộc | Mô tả |\n|---|---|---|---|\n| device_id | number/string | Có | id hoặc device_key (`esp8266-01`) |\n| target | string | Có | led1 · led2 · led3 · all |\n| action | string | Có | ON · OFF |\n\n**Kết quả:** 200 `result: \"ok\"` · 202 `result: \"pending\"` (thiết bị mất kết nối, giữ pending; khi thiết bị kết nối lại, lệnh chuyển thành `fail`) · 502 `result: \"fail\"` (thiết bị từ chối) · 504 `result: \"timeout\"` (thiết bị vẫn hoạt động nhưng không phản hồi) · 400 tham số sai · 404 không thấy thiết bị."
+					},
+					"response": []
+				},
+				{
+					"name": "Tắt Đèn 2",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Có cmd_id và result\", () => { const d = pm.response.json(); pm.expect(d).to.have.property(\"cmd_id\"); pm.expect([\"ok\",\"pending\",\"fail\",\"timeout\"]).to.include(d.result); });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"device_id\": 1,\n  \"target\": \"led2\",\n  \"action\": \"OFF\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/control",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"control"
+							],
+							"query": []
+						},
+						"description": "Bật/tắt đèn trên ESP8266.\n\n**Luồng:** INSERT device_actions (result = pending) → publish lệnh lên topic `devicecontrol` (VD `LED1_ON`) → chờ ESP phản hồi trên `deviceresponse` → UPDATE result.\n\n**Body (JSON):**\n| Trường | Kiểu | Bắt buộc | Mô tả |\n|---|---|---|---|\n| device_id | number/string | Có | id hoặc device_key (`esp8266-01`) |\n| target | string | Có | led1 · led2 · led3 · all |\n| action | string | Có | ON · OFF |\n\n**Kết quả:** 200 `result: \"ok\"` · 202 `result: \"pending\"` (thiết bị mất kết nối, giữ pending; khi thiết bị kết nối lại, lệnh chuyển thành `fail`) · 502 `result: \"fail\"` (thiết bị từ chối) · 504 `result: \"timeout\"` (thiết bị vẫn hoạt động nhưng không phản hồi) · 400 tham số sai · 404 không thấy thiết bị."
+					},
+					"response": []
+				},
+				{
+					"name": "Bật Đèn 3",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Có cmd_id và result\", () => { const d = pm.response.json(); pm.expect(d).to.have.property(\"cmd_id\"); pm.expect([\"ok\",\"pending\",\"fail\",\"timeout\"]).to.include(d.result); });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"device_id\": 1,\n  \"target\": \"led3\",\n  \"action\": \"ON\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/control",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"control"
+							],
+							"query": []
+						},
+						"description": "Bật/tắt đèn trên ESP8266.\n\n**Luồng:** INSERT device_actions (result = pending) → publish lệnh lên topic `devicecontrol` (VD `LED1_ON`) → chờ ESP phản hồi trên `deviceresponse` → UPDATE result.\n\n**Body (JSON):**\n| Trường | Kiểu | Bắt buộc | Mô tả |\n|---|---|---|---|\n| device_id | number/string | Có | id hoặc device_key (`esp8266-01`) |\n| target | string | Có | led1 · led2 · led3 · all |\n| action | string | Có | ON · OFF |\n\n**Kết quả:** 200 `result: \"ok\"` · 202 `result: \"pending\"` (thiết bị mất kết nối, giữ pending; khi thiết bị kết nối lại, lệnh chuyển thành `fail`) · 502 `result: \"fail\"` (thiết bị từ chối) · 504 `result: \"timeout\"` (thiết bị vẫn hoạt động nhưng không phản hồi) · 400 tham số sai · 404 không thấy thiết bị."
+					},
+					"response": []
+				},
+				{
+					"name": "Tắt Đèn 3",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Có cmd_id và result\", () => { const d = pm.response.json(); pm.expect(d).to.have.property(\"cmd_id\"); pm.expect([\"ok\",\"pending\",\"fail\",\"timeout\"]).to.include(d.result); });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"device_id\": 1,\n  \"target\": \"led3\",\n  \"action\": \"OFF\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/control",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"control"
+							],
+							"query": []
+						},
+						"description": "Bật/tắt đèn trên ESP8266.\n\n**Luồng:** INSERT device_actions (result = pending) → publish lệnh lên topic `devicecontrol` (VD `LED1_ON`) → chờ ESP phản hồi trên `deviceresponse` → UPDATE result.\n\n**Body (JSON):**\n| Trường | Kiểu | Bắt buộc | Mô tả |\n|---|---|---|---|\n| device_id | number/string | Có | id hoặc device_key (`esp8266-01`) |\n| target | string | Có | led1 · led2 · led3 · all |\n| action | string | Có | ON · OFF |\n\n**Kết quả:** 200 `result: \"ok\"` · 202 `result: \"pending\"` (thiết bị mất kết nối, giữ pending; khi thiết bị kết nối lại, lệnh chuyển thành `fail`) · 502 `result: \"fail\"` (thiết bị từ chối) · 504 `result: \"timeout\"` (thiết bị vẫn hoạt động nhưng không phản hồi) · 400 tham số sai · 404 không thấy thiết bị."
+					},
+					"response": []
+				},
+				{
+					"name": "Bật Tất cả đèn",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Có cmd_id và result\", () => { const d = pm.response.json(); pm.expect(d).to.have.property(\"cmd_id\"); pm.expect([\"ok\",\"pending\",\"fail\",\"timeout\"]).to.include(d.result); });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"device_id\": 1,\n  \"target\": \"all\",\n  \"action\": \"ON\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/control",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"control"
+							],
+							"query": []
+						},
+						"description": "Bật/tắt đèn trên ESP8266.\n\n**Luồng:** INSERT device_actions (result = pending) → publish lệnh lên topic `devicecontrol` (VD `LED1_ON`) → chờ ESP phản hồi trên `deviceresponse` → UPDATE result.\n\n**Body (JSON):**\n| Trường | Kiểu | Bắt buộc | Mô tả |\n|---|---|---|---|\n| device_id | number/string | Có | id hoặc device_key (`esp8266-01`) |\n| target | string | Có | led1 · led2 · led3 · all |\n| action | string | Có | ON · OFF |\n\n**Kết quả:** 200 `result: \"ok\"` · 202 `result: \"pending\"` (thiết bị mất kết nối, giữ pending; khi thiết bị kết nối lại, lệnh chuyển thành `fail`) · 502 `result: \"fail\"` (thiết bị từ chối) · 504 `result: \"timeout\"` (thiết bị vẫn hoạt động nhưng không phản hồi) · 400 tham số sai · 404 không thấy thiết bị."
+					},
+					"response": []
+				},
+				{
+					"name": "Tắt Tất cả đèn",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Có cmd_id và result\", () => { const d = pm.response.json(); pm.expect(d).to.have.property(\"cmd_id\"); pm.expect([\"ok\",\"pending\",\"fail\",\"timeout\"]).to.include(d.result); });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"device_id\": 1,\n  \"target\": \"all\",\n  \"action\": \"OFF\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/control",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"control"
+							],
+							"query": []
+						},
+						"description": "Bật/tắt đèn trên ESP8266.\n\n**Luồng:** INSERT device_actions (result = pending) → publish lệnh lên topic `devicecontrol` (VD `LED1_ON`) → chờ ESP phản hồi trên `deviceresponse` → UPDATE result.\n\n**Body (JSON):**\n| Trường | Kiểu | Bắt buộc | Mô tả |\n|---|---|---|---|\n| device_id | number/string | Có | id hoặc device_key (`esp8266-01`) |\n| target | string | Có | led1 · led2 · led3 · all |\n| action | string | Có | ON · OFF |\n\n**Kết quả:** 200 `result: \"ok\"` · 202 `result: \"pending\"` (thiết bị mất kết nối, giữ pending; khi thiết bị kết nối lại, lệnh chuyển thành `fail`) · 502 `result: \"fail\"` (thiết bị từ chối) · 504 `result: \"timeout\"` (thiết bị vẫn hoạt động nhưng không phản hồi) · 400 tham số sai · 404 không thấy thiết bị."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "6. Lịch sử hoạt động",
+			"item": [
+				{
+					"name": "Lịch sử điều khiển",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/device-actions?page=1&size=10&sort=time_desc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"device-actions"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Trang"
+								},
+								{
+									"key": "size",
+									"value": "10",
+									"description": "Số bản ghi mỗi trang"
+								},
+								{
+									"key": "sort",
+									"value": "time_desc",
+									"description": "time_desc | time_asc"
+								},
+								{
+									"key": "result",
+									"value": "ok",
+									"description": "pending | ok | fail | timeout",
+									"disabled": true
+								},
+								{
+									"key": "action",
+									"value": "ON",
+									"description": "ON | OFF",
+									"disabled": true
+								},
+								{
+									"key": "target",
+									"value": "led1",
+									"description": "led1 | led2 | led3 | all",
+									"disabled": true
+								},
+								{
+									"key": "device",
+									"value": "esp8266-01",
+									"description": "id hoặc device_key",
+									"disabled": true
+								},
+								{
+									"key": "search",
+									"value": "admin",
+									"description": "Tìm theo thiết bị, người thao tác, ghi chú...",
+									"disabled": true
+								},
+								{
+									"key": "time",
+									"value": "21/10/2026",
+									"description": "Tìm theo thời gian hiển thị (giờ VN)",
+									"disabled": true
+								},
+								{
+									"key": "from",
+									"value": "2026-10-21 00:00",
+									"description": "Từ thời điểm (UTC)",
+									"disabled": true
+								},
+								{
+									"key": "to",
+									"value": "2026-10-21 23:59",
+									"description": "Đến thời điểm (UTC)",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Lịch sử điều khiển thiết bị (device_actions JOIN devices, users), hỗ trợ lọc, tìm kiếm, sắp xếp, phân trang.\n\n**Response:** `{ items[], total, page, size }`."
+					},
+					"response": [
+						{
+							"name": "200 Trang 1, 5 bản ghi",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/device-actions?page=1&size=5&sort=time_desc",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"device-actions"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "size",
+											"value": "5"
+										},
+										{
+											"key": "sort",
+											"value": "time_desc"
+										}
+									]
+								},
+								"description": "Lịch sử điều khiển thiết bị (device_actions JOIN devices, users), hỗ trợ lọc, tìm kiếm, sắp xếp, phân trang.\n\n**Response:** `{ items[], total, page, size }`."
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"items\": [\n    {\n      \"id\": 33,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led1\",\n      \"action\": \"ON\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-21 13:53:34\",\n      \"note\": null\n    },\n    {\n      \"id\": 32,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led1\",\n      \"action\": \"OFF\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-21 13:52:26\",\n      \"note\": null\n    },\n    {\n      \"id\": 31,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led2\",\n      \"action\": \"OFF\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-21 13:52:25\",\n      \"note\": null\n    }\n  ],\n  \"total\": 33,\n  \"page\": 1,\n  \"size\": 5\n}"
+						},
+						{
+							"name": "200 Lọc result = timeout",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/device-actions?result=timeout&page=1&size=5",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"device-actions"
+									],
+									"query": [
+										{
+											"key": "result",
+											"value": "timeout"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "size",
+											"value": "5"
+										}
+									]
+								},
+								"description": "Lịch sử điều khiển thiết bị (device_actions JOIN devices, users), hỗ trợ lọc, tìm kiếm, sắp xếp, phân trang.\n\n**Response:** `{ items[], total, page, size }`."
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"items\": [\n    {\n      \"id\": 4,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led1\",\n      \"action\": \"OFF\",\n      \"result\": \"timeout\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-21 13:16:49\",\n      \"note\": \"Không nhận được phản hồi từ thiết bị\"\n    },\n    {\n      \"id\": 3,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led3\",\n      \"action\": \"OFF\",\n      \"result\": \"timeout\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-21 13:16:48\",\n      \"note\": \"Không nhận được phản hồi từ thiết bị\"\n    },\n    {\n      \"id\": 2,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led2\",\n      \"action\": \"OFF\",\n      \"result\": \"timeout\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-21 13:16:47\",\n      \"note\": \"Không nhận được phản hồi từ thiết bị\"\n    }\n  ],\n  \"total\": 4,\n  \"page\": 1,\n  \"size\": 5\n}"
+						}
+					]
+				},
+				{
+					"name": "Phân trang - Trang 2 (5 bản ghi/trang)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/device-actions?page=2&size=5&sort=time_desc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"device-actions"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "2"
+								},
+								{
+									"key": "size",
+									"value": "5"
+								},
+								{
+									"key": "sort",
+									"value": "time_desc"
+								}
+							]
+						},
+						"description": "Lấy trang thứ 2, mỗi trang 5 bản ghi → trả về bản ghi thứ 6–10 (offset = (page - 1) × size)."
+					},
+					"response": [
+						{
+							"name": "200 Trang 2 (5 bản ghi/trang)",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/device-actions?page=2&size=5&sort=time_desc",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"device-actions"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "2"
+										},
+										{
+											"key": "size",
+											"value": "5"
+										},
+										{
+											"key": "sort",
+											"value": "time_desc"
+										}
+									]
+								},
+								"description": "Lấy trang thứ 2, mỗi trang 5 bản ghi → trả về bản ghi thứ 6–10 (offset = (page - 1) × size)."
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"items\": [\n    {\n      \"id\": 170,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led3\",\n      \"action\": \"ON\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:39\",\n      \"note\": null\n    },\n    {\n      \"id\": 169,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led2\",\n      \"action\": \"OFF\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:38\",\n      \"note\": null\n    },\n    {\n      \"id\": 168,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led1\",\n      \"action\": \"OFF\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:37\",\n      \"note\": null\n    },\n    {\n      \"id\": 167,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led2\",\n      \"action\": \"ON\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:36\",\n      \"note\": null\n    },\n    {\n      \"id\": 166,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led1\",\n      \"action\": \"ON\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:30\",\n      \"note\": null\n    }\n  ],\n  \"total\": 175,\n  \"page\": 2,\n  \"size\": 5\n}"
+						}
+					]
+				},
+				{
+					"name": "Phân trang - Trang 1 (20 bản ghi/trang)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/device-actions?page=1&size=20&sort=time_desc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"device-actions"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "size",
+									"value": "20"
+								},
+								{
+									"key": "sort",
+									"value": "time_desc"
+								}
+							]
+						},
+						"description": "Đổi kích thước trang: mỗi trang 20 bản ghi."
+					},
+					"response": [
+						{
+							"name": "200 Trang 1 (20 bản ghi/trang)",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/device-actions?page=1&size=20&sort=time_desc",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"device-actions"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "size",
+											"value": "20"
+										},
+										{
+											"key": "sort",
+											"value": "time_desc"
+										}
+									]
+								},
+								"description": "Đổi kích thước trang: mỗi trang 20 bản ghi."
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"items\": [\n    {\n      \"id\": 175,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"all\",\n      \"action\": \"OFF\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:55\",\n      \"note\": null\n    },\n    {\n      \"id\": 174,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"all\",\n      \"action\": \"ON\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:52\",\n      \"note\": null\n    },\n    {\n      \"id\": 173,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led1\",\n      \"action\": \"OFF\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:48\",\n      \"note\": null\n    },\n    {\n      \"id\": 172,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led1\",\n      \"action\": \"ON\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:44\",\n      \"note\": null\n    },\n    {\n      \"id\": 171,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led3\",\n      \"action\": \"OFF\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:40\",\n      \"note\": null\n    },\n    {\n      \"id\": 170,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led3\",\n      \"action\": \"ON\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:39\",\n      \"note\": null\n    },\n    {\n      \"id\": 169,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led2\",\n      \"action\": \"OFF\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:38\",\n      \"note\": null\n    },\n    {\n      \"id\": 168,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led1\",\n      \"action\": \"OFF\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:37\",\n      \"note\": null\n    },\n    {\n      \"id\": 167,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led2\",\n      \"action\": \"ON\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:36\",\n      \"note\": null\n    },\n    {\n      \"id\": 166,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led1\",\n      \"action\": \"ON\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:30\",\n      \"note\": null\n    },\n    {\n      \"id\": 165,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led2\",\n      \"action\": \"OFF\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:29\",\n      \"note\": null\n    },\n    {\n      \"id\": 164,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led3\",\n      \"action\": \"OFF\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:29\",\n      \"note\": null\n    },\n    {\n      \"id\": 163,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led3\",\n      \"action\": \"ON\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:28\",\n      \"note\": null\n    },\n    {\n      \"id\": 162,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led1\",\n      \"action\": \"ON\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:27\",\n      \"note\": null\n    },\n    {\n      \"id\": 161,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led2\",\n      \"action\": \"ON\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:26\",\n      \"note\": null\n    },\n    {\n      \"id\": 160,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led1\",\n      \"action\": \"ON\",\n      \"result\": \"fail\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:13:10\",\n      \"note\": \"Backend chưa kết nối được tới MQTT Broker\"\n    },\n    {\n      \"id\": 159,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led2\",\n      \"action\": \"ON\",\n      \"result\": \"fail\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:12:29\",\n      \"note\": \"Backend chưa kết nối được tới MQTT Broker\"\n    },\n    {\n      \"id\": 158,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led1\",\n      \"action\": \"ON\",\n      \"result\": \"fail\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:12:24\",\n      \"note\": \"Backend chưa kết nối được tới MQTT Broker\"\n    },\n    {\n      \"id\": 157,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led1\",\n      \"action\": \"ON\",\n      \"result\": \"fail\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:11:29\",\n      \"note\": \"Backend chưa kết nối được tới MQTT Broker\"\n    },\n    {\n      \"id\": 156,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led3\",\n      \"action\": \"OFF\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-28 15:34:08\",\n      \"note\": null\n    }\n  ],\n  \"total\": 175,\n  \"page\": 1,\n  \"size\": 20\n}"
+						}
+					]
+				},
+				{
+					"name": "Phân trang + Lọc result = ok (trang 2)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/device-actions?page=2&size=5&sort=time_desc&result=ok",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"device-actions"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "2"
+								},
+								{
+									"key": "size",
+									"value": "5"
+								},
+								{
+									"key": "sort",
+									"value": "time_desc"
+								},
+								{
+									"key": "result",
+									"value": "ok"
+								}
+							]
+						},
+						"description": "Kết hợp lọc và phân trang: `total` là tổng số bản ghi sau khi lọc, dùng để tính số trang = ceil(total / size)."
+					},
+					"response": [
+						{
+							"name": "200 Lọc result = ok (trang 2)",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/device-actions?page=2&size=5&sort=time_desc&result=ok",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"device-actions"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "2"
+										},
+										{
+											"key": "size",
+											"value": "5"
+										},
+										{
+											"key": "sort",
+											"value": "time_desc"
+										},
+										{
+											"key": "result",
+											"value": "ok"
+										}
+									]
+								},
+								"description": "Kết hợp lọc và phân trang: `total` là tổng số bản ghi sau khi lọc, dùng để tính số trang = ceil(total / size)."
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"items\": [\n    {\n      \"id\": 170,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led3\",\n      \"action\": \"ON\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:39\",\n      \"note\": null\n    },\n    {\n      \"id\": 169,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led2\",\n      \"action\": \"OFF\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:38\",\n      \"note\": null\n    },\n    {\n      \"id\": 168,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led1\",\n      \"action\": \"OFF\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:37\",\n      \"note\": null\n    },\n    {\n      \"id\": 167,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led2\",\n      \"action\": \"ON\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:36\",\n      \"note\": null\n    },\n    {\n      \"id\": 166,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led1\",\n      \"action\": \"ON\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:30\",\n      \"note\": null\n    }\n  ],\n  \"total\": 154,\n  \"page\": 2,\n  \"size\": 5\n}"
+						}
+					]
+				},
+				{
+					"name": "Phân trang - Tham số không hợp lệ",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/device-actions?page=0&size=abc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"device-actions"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "abc"
+								}
+							]
+						},
+						"description": "`page`/`size` không hợp lệ → dùng giá trị mặc định page = 1, size = 10 (không báo lỗi). `size` tối đa 100."
+					},
+					"response": [
+						{
+							"name": "200 Tham số không hợp lệ",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/api/device-actions?page=0&size=abc",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"device-actions"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "0"
+										},
+										{
+											"key": "size",
+											"value": "abc"
+										}
+									]
+								},
+								"description": "`page`/`size` không hợp lệ → dùng giá trị mặc định page = 1, size = 10 (không báo lỗi). `size` tối đa 100."
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								}
+							],
+							"body": "{\n  \"items\": [\n    {\n      \"id\": 175,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"all\",\n      \"action\": \"OFF\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:55\",\n      \"note\": null\n    },\n    {\n      \"id\": 174,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"all\",\n      \"action\": \"ON\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:52\",\n      \"note\": null\n    },\n    {\n      \"id\": 173,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led1\",\n      \"action\": \"OFF\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:48\",\n      \"note\": null\n    },\n    {\n      \"id\": 172,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led1\",\n      \"action\": \"ON\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:44\",\n      \"note\": null\n    },\n    {\n      \"id\": 171,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led3\",\n      \"action\": \"OFF\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:40\",\n      \"note\": null\n    },\n    {\n      \"id\": 170,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led3\",\n      \"action\": \"ON\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:39\",\n      \"note\": null\n    },\n    {\n      \"id\": 169,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led2\",\n      \"action\": \"OFF\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:38\",\n      \"note\": null\n    },\n    {\n      \"id\": 168,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led1\",\n      \"action\": \"OFF\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:37\",\n      \"note\": null\n    },\n    {\n      \"id\": 167,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led2\",\n      \"action\": \"ON\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:36\",\n      \"note\": null\n    },\n    {\n      \"id\": 166,\n      \"device_id\": 1,\n      \"device_key\": \"esp8266-01\",\n      \"device_name\": \"ESP8266\",\n      \"target\": \"led1\",\n      \"action\": \"ON\",\n      \"result\": \"ok\",\n      \"issued_by\": \"Đỗ Hà Quân\",\n      \"issued_by_id\": 1,\n      \"time\": \"2026-10-29 01:15:30\",\n      \"note\": null\n    }\n  ],\n  \"total\": 175,\n  \"page\": 1,\n  \"size\": 10\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "7. Cảnh báo cảm biến",
+			"item": [
+				{
+					"name": "3 cảm biến ngẫu nhiên và cảnh báo",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/random-sensors?page=1&size=10",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"random-sensors"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Trang (mặc định 1)"
+								},
+								{
+									"key": "size",
+									"value": "10",
+									"description": "Số bản ghi mỗi trang (mặc định 10, tối đa 100)"
+								}
+							]
+						},
+						"description": "Giá trị mới nhất của 3 cảm biến ngẫu nhiên (0-10, 0-100, 0-1000), `warning: true` khi vượt 50% thang đo, kèm lịch sử có phân trang.\n\n**Response:** `{ device_status, sensors[], items[], total, page, size }`."
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

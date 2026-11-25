@@ -1,88 +1,84 @@
+// POST /api/control (muc 4.3.3)
+// Body: { "device_id": 1, "target": "led1", "action": "ON" }
+//   device_id: id thiet bi hoac device_key ("esp8266-01"); chap nhan ca truong "device" (Frontend gui)
+//   target   : led1 | led2 | led3 | all
+//   action   : ON | OFF
+// Luong: INSERT device_actions (pending) -> publish devicecontrol -> cho ACK deviceresponse
+//        -> UPDATE result = ok | fail | timeout (+ note), hoac giu pending neu mat ket noi
+// Ket qua: 200 { cmd_id, result: "ok" }
+//          502 { cmd_id, result: "fail", message }    thiet bi tu choi / khong gui duoc lenh
+//          504 { cmd_id, result: "timeout", message } thiet bi van hoat dong nhung khong phan hoi
+//          202 { cmd_id, result: "pending", message } thiet bi mat ket noi -> giu pending,
+//              chuyen thanh fail khi thiet bi ket noi lai
 const express = require('express');
 const db = require('../db');
-const { requireAuth } = require('../middleware/auth');
-const { publishCommand } = require('../mqtt');
+const mqttBridge = require('../mqtt');
+const deviceState = require('../services/deviceState');
 
 const router = express.Router();
 
-const getDeviceByKey = db.prepare('SELECT * FROM devices WHERE device_key = ?');
-const insertAction = db.prepare(
-  `INSERT INTO device_actions (device_id, target, action, issued_by, result, timestamp)
-   VALUES (?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP)`
-);
-const getAction = db.prepare('SELECT * FROM device_actions WHERE id = ?');
-const setTimeoutResult = db.prepare(
-  `UPDATE device_actions SET result = 'timeout' WHERE id = ? AND result = 'pending'`
-);
-const setFailResult = db.prepare(
-  `UPDATE device_actions SET result = 'fail', note = ? WHERE id = ? AND result = 'pending'`
-);
+const TARGETS = { led1: 'LED1', led2: 'LED2', led3: 'LED3', all: 'ALL' };
+const ACTIONS = ['ON', 'OFF'];
+const TIMEOUT_MS = Number(process.env.COMMAND_TIMEOUT_SEC || 10) * 1000;
 
-const COMMAND_TIMEOUT_MS = Number(process.env.COMMAND_TIMEOUT_SEC || 10) * 1000;
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// Dich target (den) sang tien to lenh ma firmware hieu.
-const TARGET_PREFIX = { led1: 'LED1', led2: 'LED2', led3: 'LED3', all: 'ALL' };
-
-router.post('/', requireAuth, async (req, res) => {
-  const { device_id: deviceKey, target, action } = req.body || {};
-  const normalizedTarget = String(target || '').toLowerCase();
-  const normalizedAction = String(action || '').toUpperCase();
-
-  if (!deviceKey || !TARGET_PREFIX[normalizedTarget] || !['ON', 'OFF'].includes(normalizedAction)) {
-    return res.status(400).json({
-      message: 'Thiếu device_id, target phải là led1/led2/led3/all và action phải là ON/OFF',
-    });
-  }
-
-  const device = getDeviceByKey.get(deviceKey);
-  if (!device) {
-    return res.status(404).json({ message: `Không tìm thấy thiết bị ${deviceKey}` });
-  }
-
-  // Lenh gui xuong ESP8266: vd "LED1_ON", "LED2_OFF", "ALL_ON".
-  const command = `${TARGET_PREFIX[normalizedTarget]}_${normalizedAction}`;
-
-  const info = insertAction.run(device.id, normalizedTarget, normalizedAction, req.user.id);
-  const actionId = info.lastInsertRowid;
-
+router.post('/', async (req, res, next) => {
   try {
-    await publishCommand(command);
-  } catch (e) {
-    const message = `Không gửi được lệnh tới MQTT Broker: ${e.message}`;
-    setFailResult.run(message, actionId);
-    return res.status(502).json({
-      cmd_id: actionId,
-      result: 'fail',
-      message,
-    });
-  }
+    const body = req.body || {};
+    const deviceRef = body.device_id ?? body.device;
+    const target = String(body.target || '').trim().toLowerCase();
+    const action = String(body.action || '').trim().toUpperCase();
 
-  // Cho ACK tu ESP8266 (qua topic deviceresponse) trong thoi gian gioi han
-  const deadline = Date.now() + COMMAND_TIMEOUT_MS;
-  let current = getAction.get(actionId);
-  while (current.result === 'pending' && Date.now() < deadline) {
-    await sleep(200);
-    current = getAction.get(actionId);
-  }
+    if (deviceRef === undefined || deviceRef === null || deviceRef === '') {
+      return res.status(400).json({ message: 'Thiếu device_id' });
+    }
+    if (!TARGETS[target]) {
+      return res.status(400).json({ message: 'target phải là led1, led2, led3 hoặc all' });
+    }
+    if (!ACTIONS.includes(action)) {
+      return res.status(400).json({ message: 'action phải là ON hoặc OFF' });
+    }
 
-  if (current.result === 'pending') {
-    setTimeoutResult.run(actionId);
-    current = getAction.get(actionId);
-  }
+    const device = await db.queryOne('SELECT id, device_key, device_name FROM devices WHERE id = ? OR device_key = ? LIMIT 1', [
+      Number(deviceRef) || 0,
+      String(deviceRef),
+    ]);
+    if (!device) return res.status(404).json({ message: `Không tìm thấy thiết bị: ${deviceRef}` });
 
-  const httpStatus = current.result === 'ok' ? 200 : current.result === 'timeout' ? 504 : 502;
-  res.status(httpStatus).json({
-    cmd_id: current.id,
-    device_id: deviceKey,
-    target: normalizedTarget,
-    action: normalizedAction,
-    result: current.result,
-    message: current.note || undefined,
-  });
+    // 1. Ghi lenh voi result = pending
+    const inserted = await db.query(
+      "INSERT INTO device_actions (device_id, target, action, issued_by, result, `timestamp`) VALUES (?, ?, ?, ?, 'pending', ?)",
+      [device.id, target, action, req.user.id, new Date()]
+    );
+    const cmdId = inserted.insertId;
+
+    // 2. Publish lenh MQTT va cho ACK
+    const command = `${TARGETS[target]}_${action}`;
+    const { result, note } = await mqttBridge.sendCommand(device.id, command, TIMEOUT_MS);
+
+    // 3. Cap nhat ket qua
+    if (result === 'pending') {
+      await db.query("UPDATE device_actions SET note = ? WHERE id = ? AND result = 'pending'", [note, cmdId]);
+      deviceState.expectReturn(device.id);
+    } else {
+      await db.query('UPDATE device_actions SET result = ?, note = ? WHERE id = ?', [result, note || null, cmdId]);
+    }
+
+    const payload = {
+      cmd_id: cmdId,
+      result,
+      device_id: device.id,
+      device_key: device.device_key,
+      target,
+      action,
+      command,
+      leds: await deviceState.getLedStates(device.id),
+    };
+    if (result === 'ok') return res.json(payload);
+    if (result === 'pending') return res.status(202).json({ ...payload, message: note });
+    return res.status(result === 'timeout' ? 504 : 502).json({ ...payload, message: note });
+  } catch (err) {
+    next(err);
+  }
 });
 
 module.exports = router;

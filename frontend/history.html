@@ -17,34 +17,45 @@
     <span class="conn-badge" id="connBadge"></span>
   </div>
 
-  <div class="card">
-    <div class="table-title">
-      <div style="font-weight:700;font-size:15px">Lịch sử Bật Tắt</div>
-      <p class="page-subtitle" style="margin:2px 0 16px">Nhật ký thao tác bật/tắt các thiết bị (theo dõi PENDING / SUCCESS / FAIL / TIMEOUT)</p>
-    </div>
-
-    <div class="toolbar">
+  <div class="card filter-card">
+    <div class="filter-field">
+      <label for="deviceFilter">Thiết bị</label>
       <select id="deviceFilter">
         <option value="">Tất cả thiết bị</option>
       </select>
+    </div>
+    <div class="filter-field">
+      <label for="actionFilter">Lệnh thao tác</label>
       <select id="actionFilter">
         <option value="">Tất cả lệnh</option>
         <option value="ON">ON</option>
         <option value="OFF">OFF</option>
       </select>
+    </div>
+    <div class="filter-field">
+      <label for="resultFilter">Trạng thái</label>
       <select id="resultFilter">
         <option value="">Tất cả trạng thái</option>
         <option value="pending">PENDING</option>
         <option value="ok">SUCCESS</option>
-        <option value="fail">FAIL</option>
+        <option value="fail">FAILED</option>
         <option value="timeout">TIMEOUT</option>
       </select>
-      <div class="date-range">
-        <div class="field-icon" id="fromWrap"><input type="date" id="fromDate" /></div>
-        <span>–</span>
-        <div class="field-icon" id="toWrap"><input type="date" id="toDate" /></div>
-      </div>
-      <button class="btn btn-primary" id="refreshBtn"><span>Làm mới</span></button>
+    </div>
+    <div class="filter-field filter-field-wide">
+      <label for="timeFilter">Thời gian</label>
+      <input type="text" id="timeFilter" placeholder="VD: 26/08/2026, 22:52 hoặc 26/08/2026 22:52" />
+    </div>
+    <div class="filter-actions">
+      <button type="button" class="btn btn-primary" id="searchBtn"><span>Tìm kiếm</span></button>
+      <button type="button" class="btn btn-outline" id="resetBtn">Đặt lại</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="table-title">
+      <div style="font-weight:700;font-size:15px">Lịch sử Bật Tắt</div>
+      <p class="page-subtitle" style="margin:2px 0 16px">Nhật ký thao tác bật/tắt các thiết bị (theo dõi PENDING / SUCCESS / FAILED / TIMEOUT)</p>
     </div>
 
     <div id="tableWrap"></div>
@@ -53,16 +64,20 @@
 </main>
 
 <script src="/js/icons.js"></script>
+<script src="/js/mock.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/layout.js"></script>
 <script>
 renderLayout('history');
 document.getElementById('todayLabel').textContent = todayLabel();
-document.getElementById('fromWrap').insertAdjacentHTML('afterbegin', Icons.calendar);
-document.getElementById('toWrap').insertAdjacentHTML('afterbegin', Icons.calendar);
-document.getElementById('refreshBtn').insertAdjacentHTML('afterbegin', Icons.refresh);
+document.getElementById('searchBtn').insertAdjacentHTML('afterbegin', Icons.search);
 
-const state = { page: 1, size: 8, device: '', action: '', result: '', from: '', to: '', sort: 'time_desc' };
+const PAGE_SIZE_KEY = 'historyPageSize';
+function savePageSize(n) { try { localStorage.setItem(PAGE_SIZE_KEY, String(n)); } catch {} }
+function loadPageSize() {
+  try { const n = Number(localStorage.getItem(PAGE_SIZE_KEY)); return PAGE_SIZE_OPTIONS.includes(n) ? n : 8; } catch { return 8; }
+}
+const state = { page: 1, size: loadPageSize(), device: '', action: '', result: '', time: '', sort: 'time_desc' };
 
 function buildQuery() {
   const p = new URLSearchParams();
@@ -72,8 +87,7 @@ function buildQuery() {
   if (state.device) p.set('device', state.device);
   if (state.action) p.set('action', state.action);
   if (state.result) p.set('result', state.result);
-  if (state.from) p.set('from', state.from + ' 00:00:00');
-  if (state.to) p.set('to', state.to + ' 23:59:59');
+  if (state.time) p.set('time', state.time);
   return p.toString();
 }
 
@@ -104,6 +118,7 @@ function renderTable(items) {
         <tr>
           <th>ID</th>
           <th>Tên thiết bị</th>
+          <th>Người thao tác</th>
           <th>Lệnh thao tác</th>
           <th>Trạng thái thực thi</th>
           <th class="sortable" data-sort="time">Thời gian</th>
@@ -117,8 +132,9 @@ function renderTable(items) {
             <td class="mono-id">${formatId(it.id)}</td>
             <td>
               <div style="font-weight:700">${escapeHtml(it.device_name)}</div>
-              <div class="note-cell">${escapeHtml(it.target)}${it.issued_by ? ' · ' + escapeHtml(it.issued_by) : ''}</div>
+              <div class="note-cell">${escapeHtml(it.target)}</div>
             </td>
+            <td>${escapeHtml(it.issued_by || '—')}</td>
             <td><span class="badge ${it.action === 'ON' ? 'on' : 'off'}">${escapeHtml(it.action)}</span></td>
             <td>
               <span class="badge ${it.result}">${resultBadgeLabel(it.result)}</span>
@@ -144,7 +160,12 @@ async function load() {
   try {
     const data = await Api.get(`/api/device-actions?${buildQuery()}`);
     renderTable(data.items);
-    renderPager(document.getElementById('pagination'), data, (p) => { state.page = p; load(); });
+    renderPager(
+      document.getElementById('pagination'),
+      data,
+      (p) => { state.page = p; load(); },
+      (n) => { state.size = n; state.page = 1; savePageSize(n); load(); }
+    );
     setConnection(true);
   } catch (err) {
     document.getElementById('tableWrap').innerHTML = `<div class="error-state">Không thể tải lịch sử hoạt động. Vui lòng thử lại sau. (${err.message})</div>`;
@@ -153,12 +174,26 @@ async function load() {
   }
 }
 
-document.getElementById('deviceFilter').addEventListener('change', (e) => { state.device = e.target.value; state.page = 1; load(); });
-document.getElementById('actionFilter').addEventListener('change', (e) => { state.action = e.target.value; state.page = 1; load(); });
-document.getElementById('resultFilter').addEventListener('change', (e) => { state.result = e.target.value; state.page = 1; load(); });
-document.getElementById('fromDate').addEventListener('change', (e) => { state.from = e.target.value; state.page = 1; load(); });
-document.getElementById('toDate').addEventListener('change', (e) => { state.to = e.target.value; state.page = 1; load(); });
-document.getElementById('refreshBtn').addEventListener('click', load);
+// ===== Bo loc: chi ap dung khi bam "Tim kiem" (hoac Enter), "Dat lai" de xoa =====
+function applyFilters() {
+  state.device = document.getElementById('deviceFilter').value;
+  state.action = document.getElementById('actionFilter').value;
+  state.result = document.getElementById('resultFilter').value;
+  // Chuan hoa: "26/08/2026 - 22:52" -> "26/08/2026 22:52", bo khoang trang thua
+  state.time = document.getElementById('timeFilter').value.trim().replace(/\s*-\s*(?=\d{1,2}:)/, ' ').replace(/\s+/g, ' ');
+  state.page = 1;
+  load();
+}
+function resetFilters() {
+  ['deviceFilter', 'actionFilter', 'resultFilter', 'timeFilter'].forEach((id) => { document.getElementById(id).value = ''; });
+  Object.assign(state, { device: '', action: '', result: '', time: '', page: 1 });
+  load();
+}
+document.getElementById('searchBtn').addEventListener('click', applyFilters);
+document.getElementById('resetBtn').addEventListener('click', resetFilters);
+document.querySelectorAll('.filter-card input').forEach((el) =>
+  el.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyFilters(); })
+);
 
 loadDeviceOptions();
 load();

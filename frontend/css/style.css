@@ -282,6 +282,9 @@ svg { display: block; }
   margin-bottom: 10px;
 }
 .device-item:last-of-type { margin-bottom: 14px; }
+.device-item-all { background: var(--bg); }
+.device-item-all .device-icon { background: var(--surface); }
+.device-item-all .device-icon.on { background: var(--primary-bg); }
 .device-icon {
   width: 40px;
   height: 40px;
@@ -301,6 +304,8 @@ svg { display: block; }
 .device-status { font-size: 11px; margin-top: 3px; display: flex; align-items: center; gap: 5px; }
 .device-status.on { color: var(--success); }
 .device-status.off { color: var(--text-muted); }
+.device-status.pending { color: var(--warning); font-weight: 600; }
+.device-status.failed { color: var(--danger); font-weight: 600; }
 .device-status .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
 /* Toggle switch */
@@ -366,7 +371,7 @@ svg { display: block; }
   width: 14px; height: 14px; color: var(--text-muted); pointer-events: none;
 }
 
-input[type="text"], input[type="search"], input[type="date"], select {
+input[type="text"], input[type="search"], input[type="date"], input[type="datetime-local"], select {
   padding: 9px 12px;
   border-radius: 9px;
   border: 1px solid var(--border);
@@ -499,3 +504,51 @@ tbody tr:hover { background: #fafbff; }
 .profile-row:last-child { border-bottom: none; }
 .profile-label { width: 140px; flex-shrink: 0; font-size: 12px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
 .profile-value { font-size: 14px; font-weight: 600; }
+
+/* Link Figma / GitHub / Postman trong trang Hồ sơ */
+.profile-link { display: inline-flex; align-items: center; gap: 8px; color: var(--primary); font-weight: 500; text-decoration: none; }
+.profile-link:hover { text-decoration: underline; }
+.profile-link svg { flex-shrink: 0; }
+.profile-link.muted { color: var(--text-muted); font-style: italic; }
+
+/* Loc thoi gian (ngay + gio) va chon so dong/trang */
+.date-range-label { font-size: 12.5px; color: var(--text-muted); }
+.date-range input[type="datetime-local"] { min-width: 190px; }
+.btn-link { background: none; border: none; color: var(--primary); font-size: 12.5px; cursor: pointer; padding: 4px 2px; font-family: inherit; }
+.btn-link:hover { text-decoration: underline; }
+.pager-info { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.page-size { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
+.page-size-select { padding: 5px 8px; font-size: 12.5px; border-radius: 8px; }
+
+/* ===== Thanh bo loc dang the (label phia tren + nut Tim kiem / Dat lai) ===== */
+.filter-card { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
+.filter-field { display: flex; flex-direction: column; gap: 7px; flex: 1 1 170px; min-width: 150px; }
+.filter-field-wide { flex: 2 1 240px; }
+.filter-field-time { flex: 2.4 1 360px; }
+.filter-field label { font-size: 11.5px; font-weight: 700; color: var(--text); text-transform: uppercase; letter-spacing: .04em; }
+.filter-field select, .filter-field input { width: 100%; height: 40px; box-sizing: border-box; }
+.time-range { display: flex; align-items: center; gap: 6px; color: var(--text-muted); }
+.time-range input { flex: 1; min-width: 0; }
+.filter-actions { display: flex; gap: 10px; }
+.filter-actions .btn { height: 40px; min-width: 100px; }
+.pagination .page-size { margin: 0 auto; }
+@media (max-width: 720px) {
+  .filter-field-time { flex-basis: 100%; }
+  .filter-actions { width: 100%; }
+  .filter-actions .btn { flex: 1; }
+}
+
+
+/* ===== Tab Canh bao: LED ao cua 3 cam bien ngau nhien ===== */
+.warn-card { display: flex; flex-direction: column; gap: 10px; }
+.warn-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.warn-range { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.warn-value { font-size: 28px; font-weight: 700; }
+.warn-bar { height: 8px; border-radius: 999px; background: var(--bg); overflow: hidden; }
+.warn-bar-fill { height: 100%; width: 0; background: var(--primary); transition: width .3s ease; }
+.warn-card.warning .warn-bar-fill { background: var(--danger); }
+.warn-status { font-size: 12px; color: var(--text-muted); }
+.warn-card.warning .warn-status { color: var(--danger); font-weight: 600; }
+.warn-led { width: 22px; height: 22px; border-radius: 50%; background: #d5d9e0; flex-shrink: 0; }
+.warn-card.warning .warn-led { background: var(--danger); box-shadow: 0 0 10px var(--danger); animation: warn-blink .5s steps(2, jump-none) infinite; }
+@keyframes warn-blink { from { opacity: 1; } to { opacity: .15; } }

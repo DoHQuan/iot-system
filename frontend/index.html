@@ -26,9 +26,6 @@
         <button class="icon-btn" id="refreshBtn" title="Làm mới"></button>
       </div>
       <div id="deviceControlList"></div>
-      <a class="btn btn-outline btn-block" href="/history.html">
-        <span>XEM LỊCH SỬ ĐIỀU KHIỂN</span>
-      </a>
     </div>
   </div>
 
@@ -40,13 +37,13 @@
 
 <script src="/js/vendor/chart.umd.min.js"></script>
 <script src="/js/icons.js"></script>
+<script src="/js/mock.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/layout.js"></script>
 <script>
 renderLayout('dashboard');
 document.getElementById('refreshBtn').innerHTML = Icons.refresh;
 document.getElementById('refreshIcon').innerHTML = Icons.refresh;
-document.querySelector('.control-card .btn-outline').innerHTML = Icons.list + '<span>XEM LỊCH SỬ ĐIỀU KHIỂN</span>';
 
 const TYPE_ORDER = ['temperature', 'light', 'humidity'];
 const TYPE_META = {
@@ -56,7 +53,12 @@ const TYPE_META = {
 };
 
 let chart;
-let controlBusy = false;
+
+// ===== Trang thai den lay tu server (dashboard), lenh dang cho/that bai lay tu last_actions =====
+const DEFAULT_DEVICES = [
+  { device_id: 'esp8266', name: 'ESP8266', led1_state: 'OFF', led2_state: 'OFF', led3_state: 'OFF' },
+];
+let deviceList = DEFAULT_DEVICES; // danh sach thiet bi dang hien thi
 
 function byTypeOrder(a, b) {
   return TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type);
@@ -102,16 +104,31 @@ function renderChart(series) {
       data: s.points.map((p) => p.value),
       borderColor: meta.color || '#999',
       backgroundColor: 'transparent',
-      tension: 0.35,
+      tension: 0,
       pointRadius: 0,
       borderWidth: 2,
       yAxisID: axisMap[s.type] || 'yTemp',
     };
   });
 
+  // Du lieu dang la duong ngang -> dat khoang truc rieng de 3 duong nam o 3 do cao khac nhau
+  const AXIS_LAYOUT = {
+    yTemp: { span: 10, at: 0.8, step: 1 },       // nhiet do: phia tren
+    yHumidity: { span: 20, at: 0.5, step: 2 },   // do am: o giua
+    yLight: { span: 400, at: 0.2, step: 50 },    // anh sang: phia duoi
+  };
+  const ranges = {};
+  datasets.forEach((d) => {
+    const layout = AXIS_LAYOUT[d.yAxisID];
+    if (!layout || !d.data.length) return;
+    const min = Math.round((d.data[0] - layout.span * layout.at) / layout.step) * layout.step;
+    ranges[d.yAxisID] = { min, max: min + layout.span };
+  });
+
   if (chart) {
     chart.data.labels = labels;
     chart.data.datasets = datasets;
+    Object.entries(ranges).forEach(([id, r]) => Object.assign(chart.options.scales[id], r));
     chart.update('none');
     return;
   }
@@ -125,13 +142,44 @@ function renderChart(series) {
       interaction: { mode: 'index', intersect: false },
       plugins: { legend: { display: false } },
       scales: {
-        yTemp: { position: 'left', ticks: { color: '#ef4444', font: { size: 10 } }, grid: { color: '#eef0f4' } },
-        yHumidity: { position: 'left', ticks: { color: '#3b82f6', font: { size: 10 } }, grid: { display: false } },
-        yLight: { position: 'right', ticks: { color: '#f59e0b', font: { size: 10 } }, grid: { display: false } },
+        yTemp: { position: 'left', ...ranges.yTemp, ticks: { color: '#ef4444', font: { size: 10 } }, grid: { color: '#eef0f4' } },
+        yHumidity: { position: 'left', ...ranges.yHumidity, ticks: { color: '#3b82f6', font: { size: 10 } }, grid: { display: false } },
+        yLight: { position: 'right', ...ranges.yLight, ticks: { color: '#f59e0b', font: { size: 10 } }, grid: { display: false } },
         x: { ticks: { font: { size: 10 }, maxRotation: 0 }, grid: { display: false } },
       },
     },
   });
+}
+
+function ledRowState(d, led) {
+  const last = d.last_actions?.[led.target];
+  const pending = last?.result === 'pending';
+  const isOn = d[led.stateKey] === 'ON';
+  return {
+    pending,
+    failed: last?.result === 'fail',
+    action: last?.action,
+    isOn,
+    checked: pending ? last.action === 'ON' : isOn, // dang cho: cong tac o vi tri lenh vua gui
+  };
+}
+
+function statusHtml(cls, text) {
+  return `<div class="device-status ${cls}"><span class="dot"></span>${text}</div>`;
+}
+
+function ledStatusHtml(s) {
+  if (s.pending) return statusHtml('pending', `Đang chờ ${s.action === 'ON' ? 'bật' : 'tắt'} (PENDING)`);
+  if (s.failed) return statusHtml('failed', `${s.action === 'ON' ? 'Bật' : 'Tắt'} thất bại (FAILED)`);
+  return statusHtml(s.isOn ? 'on' : 'off', s.isOn ? 'Đang bật' : 'Đang tắt');
+}
+
+function allStatusHtml(states) {
+  const failed = states.filter((s) => s.failed).length;
+  if (states.some((s) => s.pending)) return statusHtml('pending', 'Đang chờ thiết bị (PENDING)');
+  if (failed) return statusHtml('failed', `${failed} đèn thất bại (FAILED)`);
+  const onCount = states.filter((s) => s.isOn).length;
+  return statusHtml(onCount ? 'on' : 'off', `${onCount}/${states.length} đèn đang bật`);
 }
 
 function renderDeviceControl(deviceStatus) {
@@ -148,44 +196,63 @@ function renderDeviceControl(deviceStatus) {
 
   el.innerHTML = deviceStatus
     .map((d) => {
-      const rows = LEDS.map((led) => {
-        const isOn = d[led.stateKey] === 'ON';
+      const states = LEDS.map((led) => ledRowState(d, led));
+      const allRow = `
+        <div class="device-item device-item-all" data-device="${escapeHtml(d.device_id)}">
+          <div class="device-icon ${states.some((s) => s.isOn) ? 'on' : ''}">${Icons.bulb}</div>
+          <div class="device-info">
+            <div class="device-name">Tất cả đèn</div>
+            <div class="device-sub">Bật/tắt cùng lúc ${LEDS.length} đèn</div>
+            ${allStatusHtml(states)}
+          </div>
+          <label class="switch">
+            <input type="checkbox" ${states.every((s) => s.checked) ? 'checked' : ''} ${states.some((s) => s.pending) ? 'disabled' : ''} data-device="${escapeHtml(d.device_id)}" data-target="all" />
+            <span class="switch-track"></span>
+          </label>
+        </div>`;
+      const rows = LEDS.map((led, i) => {
+        const s = states[i];
         return `
         <div class="device-item" data-device="${escapeHtml(d.device_id)}">
-          <div class="device-icon ${isOn ? 'on' : ''}">${Icons.bulb}</div>
+          <div class="device-icon ${s.isOn ? 'on' : ''}">${Icons.bulb}</div>
           <div class="device-info">
             <div class="device-name">${led.label}</div>
             <div class="device-sub">Thiết bị: ${escapeHtml(d.name)} (${escapeHtml(d.device_id)})</div>
-            <div class="device-status ${isOn ? 'on' : 'off'}"><span class="dot"></span>${isOn ? 'Đang bật' : 'Đang tắt'}</div>
+            ${ledStatusHtml(s)}
           </div>
           <label class="switch">
-            <input type="checkbox" ${isOn ? 'checked' : ''} data-device="${escapeHtml(d.device_id)}" data-target="${led.target}" />
+            <input type="checkbox" ${s.checked ? 'checked' : ''} ${s.pending ? 'disabled' : ''} data-device="${escapeHtml(d.device_id)}" data-target="${led.target}" />
             <span class="switch-track"></span>
           </label>
         </div>`;
       }).join('');
-      return rows;
+      return allRow + rows;
     })
     .join('');
 
   el.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
-    cb.addEventListener('change', () => sendControl(cb.dataset.device, cb.dataset.target, cb.checked ? 'ON' : 'OFF', cb));
+    cb.addEventListener('change', () => sendControl(cb.dataset.device, cb.dataset.target, cb.checked ? 'ON' : 'OFF'));
   });
 }
 
-async function sendControl(deviceId, target, action, checkbox) {
-  if (controlBusy) return;
-  controlBusy = true;
-  checkbox.disabled = true;
+async function sendControl(deviceId, target, action) {
+  // 1. Hien ngay trang thai cho ACK, khoa cong tac
+  document.querySelectorAll('#deviceControlList input[type="checkbox"]').forEach((cb) => {
+    if (cb.dataset.device !== deviceId || (target !== 'all' && cb.dataset.target !== target)) return;
+    cb.checked = action === 'ON';
+    cb.disabled = true;
+    cb.closest('.device-item').querySelector('.device-status').outerHTML = statusHtml('pending', 'Đang gửi lệnh...');
+  });
+
   try {
-    await Api.post('/api/control', { device_id: deviceId, target, action });
+    // 2. Gui lenh len server/mock -> duoc ghi vao lich su hoat dong
+    const user = Api.getUser();
+    await Api.post('/api/control', { device: deviceId, target, action, issued_by: user?.full_name || user?.username });
   } catch (err) {
-    checkbox.checked = !checkbox.checked; // revert on failure
-  } finally {
-    checkbox.disabled = false;
-    controlBusy = false;
-    load();
+    alert('Không gửi được lệnh điều khiển: ' + err.message);
   }
+  // 3. Ve lai theo server (ok / pending / fail)
+  await load();
 }
 
 async function load() {
@@ -200,17 +267,20 @@ async function load() {
     renderLegend(series);
     renderChart(series);
 
-    renderDeviceControl(data.deviceStatus);
+    deviceList = data.deviceStatus.length ? data.deviceStatus : DEFAULT_DEVICES;
+    renderDeviceControl(deviceList);
 
     document.getElementById('updatedAt').textContent = `Cập nhật cuối: ${formatTime(data.updatedAt)}`;
   } catch (err) {
     const box = document.getElementById('loadError');
     box.hidden = false;
     box.textContent = 'Không tải được dữ liệu Dashboard: ' + err.message;
+    renderDeviceControl(deviceList); // van hien cong tac de bat/tat duoc
   }
 }
 
 document.getElementById('refreshBtn').addEventListener('click', load);
+renderDeviceControl(deviceList); // hien cong tac ngay, khong cho du lieu
 load();
 setInterval(load, 4000);
 </script>

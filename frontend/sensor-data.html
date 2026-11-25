@@ -17,28 +17,34 @@
     <span class="conn-badge" id="connBadge"></span>
   </div>
 
-  <div class="card">
-    <div class="table-title">
-      <div style="font-weight:700;font-size:15px">Lịch sử Cảm biến</div>
-      <p class="page-subtitle" style="margin:2px 0 16px">Dữ liệu đọc từ các cảm biến nhiệt độ, độ ẩm và ánh sáng</p>
-    </div>
-
-    <div class="toolbar">
+  <div class="card filter-card">
+    <div class="filter-field">
+      <label for="typeFilter">Loại cảm biến</label>
       <select id="typeFilter">
         <option value="">Tất cả cảm biến</option>
         <option value="temperature">Nhiệt độ</option>
         <option value="humidity">Độ ẩm</option>
         <option value="light">Ánh sáng</option>
+        <option value="random_10">Cảm biến 1 (0-10)</option>
+        <option value="random_100">Cảm biến 2 (0-100)</option>
+        <option value="random_1000">Cảm biến 3 (0-1000)</option>
+        <option value="time">Thời gian</option>
       </select>
-      <div class="field-icon" id="searchWrap" style="min-width:220px">
-        <input type="text" id="valueFilter" placeholder="Giá trị: Ví dụ: 25.5 hoặc >30" style="width:100%" />
-      </div>
-      <div class="date-range">
-        <div class="field-icon" id="fromWrap"><input type="date" id="fromDate" /></div>
-        <span>–</span>
-        <div class="field-icon" id="toWrap"><input type="date" id="toDate" /></div>
-      </div>
-      <button class="btn btn-primary" id="refreshBtn"><span>Làm mới</span></button>
+    </div>
+    <div class="filter-field filter-field-wide">
+      <label for="valueFilter">Giá trị</label>
+      <input type="text" id="valueFilter" placeholder="VD: 25.5, >30, Nhiệt độ >30" />
+    </div>
+    <div class="filter-actions">
+      <button type="button" class="btn btn-primary" id="searchBtn"><span>Tìm kiếm</span></button>
+      <button type="button" class="btn btn-outline" id="resetBtn">Đặt lại</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="table-title">
+      <div style="font-weight:700;font-size:15px">Lịch sử Cảm biến</div>
+      <p class="page-subtitle" style="margin:2px 0 16px">Dữ liệu đọc từ các cảm biến nhiệt độ, độ ẩm, ánh sáng và 3 cảm biến ngẫu nhiên</p>
     </div>
 
     <div id="tableWrap"></div>
@@ -47,18 +53,20 @@
 </main>
 
 <script src="/js/icons.js"></script>
+<script src="/js/mock.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/layout.js"></script>
 <script>
 renderLayout('sensor-data');
 document.getElementById('todayLabel').textContent = todayLabel();
-document.getElementById('searchWrap').insertAdjacentHTML('afterbegin', Icons.search);
-document.getElementById('fromWrap').insertAdjacentHTML('afterbegin', Icons.calendar);
-document.getElementById('toWrap').insertAdjacentHTML('afterbegin', Icons.calendar);
-document.getElementById('refreshBtn').insertAdjacentHTML('afterbegin', Icons.refresh);
+document.getElementById('searchBtn').insertAdjacentHTML('afterbegin', Icons.search);
 
-const state = { page: 1, size: 8, type: '', value: '', from: '', to: '', sort: 'time_desc' };
-let debounceTimer;
+const PAGE_SIZE_KEY = 'sensorPageSize';
+function savePageSize(n) { try { localStorage.setItem(PAGE_SIZE_KEY, String(n)); } catch {} }
+function loadPageSize() {
+  try { const n = Number(localStorage.getItem(PAGE_SIZE_KEY)); return PAGE_SIZE_OPTIONS.includes(n) ? n : 8; } catch { return 8; }
+}
+const state = { page: 1, size: loadPageSize(), type: '', value: '', search: '', time: '', sort: 'time_desc' };
 
 function buildQuery() {
   const p = new URLSearchParams();
@@ -67,9 +75,18 @@ function buildQuery() {
   p.set('sort', state.sort);
   if (state.type) p.set('type', state.type);
   if (state.value) p.set('value', state.value);
-  if (state.from) p.set('from', state.from + ' 00:00:00');
-  if (state.to) p.set('to', state.to + ' 23:59:59');
+  if (state.search) p.set('search', state.search);
+  if (state.time) p.set('time', state.time);
   return p.toString();
+}
+
+const VALUE_PLACEHOLDER = {
+  '': 'VD: 25.5, >30, Nhiệt độ >30',
+  time: 'VD: 26/08/2026, 22:52 hoặc 26/08/2026 22:52',
+};
+function syncValuePlaceholder() {
+  const type = document.getElementById('typeFilter').value;
+  document.getElementById('valueFilter').placeholder = VALUE_PLACEHOLDER[type] || VALUE_PLACEHOLDER[''];
 }
 
 const VALUE_CLASS = { temperature: 'value-temp', humidity: 'value-humidity', light: 'value-light' };
@@ -119,7 +136,12 @@ async function load() {
   try {
     const data = await Api.get(`/api/sensor-data?${buildQuery()}`);
     renderTable(data.items);
-    renderPager(document.getElementById('pagination'), data, (p) => { state.page = p; load(); });
+    renderPager(
+      document.getElementById('pagination'),
+      data,
+      (p) => { state.page = p; load(); },
+      (n) => { state.size = n; state.page = 1; savePageSize(n); load(); }
+    );
     setConnection(true);
   } catch (err) {
     document.getElementById('tableWrap').innerHTML = `<div class="error-state">Không thể tải dữ liệu cảm biến. Vui lòng thử lại sau. (${err.message})</div>`;
@@ -128,14 +150,40 @@ async function load() {
   }
 }
 
-document.getElementById('typeFilter').addEventListener('change', (e) => { state.type = e.target.value; state.page = 1; load(); });
-document.getElementById('valueFilter').addEventListener('input', (e) => {
-  clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => { state.value = e.target.value.trim(); state.page = 1; load(); }, 350);
-});
-document.getElementById('fromDate').addEventListener('change', (e) => { state.from = e.target.value; state.page = 1; load(); });
-document.getElementById('toDate').addEventListener('change', (e) => { state.to = e.target.value; state.page = 1; load(); });
-document.getElementById('refreshBtn').addEventListener('click', load);
+// ===== Bo loc: chi ap dung khi bam "Tim kiem" (hoac Enter), "Dat lai" de xoa =====
+function applyFilters() {
+  const type = document.getElementById('typeFilter').value;
+  const raw = document.getElementById('valueFilter').value.trim();
+  if (type === 'time') {
+    // Chon loai "Thoi gian" -> o Gia tri dung de nhap dieu kien thoi gian
+    state.type = '';
+    state.value = '';
+    state.search = '';
+    // Chuan hoa: "26/08/2026 - 22:52" -> "26/08/2026 22:52", bo khoang trang thua
+    state.time = raw.replace(/\s*-\s*(?=\d{1,2}:)/, ' ').replace(/\s+/g, ' ');
+  } else {
+    // Tach o gia tri thanh 2 phan: chu (ten cam bien) + dieu kien so o cuoi (25.5, >30, <=20...)
+    const m = raw.match(/(?:^|\s)((?:>=|<=|>|<|=)?\s*-?\d+(?:[.,]\d+)?)$/);
+    state.type = type;
+    state.value = m ? m[1].replace(/\s+/g, '').replace(',', '.') : '';
+    state.search = (m ? raw.slice(0, raw.length - m[0].length) : raw).trim();
+    state.time = '';
+  }
+  state.page = 1;
+  load();
+}
+function resetFilters() {
+  ['typeFilter', 'valueFilter'].forEach((id) => { document.getElementById(id).value = ''; });
+  Object.assign(state, { type: '', value: '', search: '', time: '', page: 1 });
+  syncValuePlaceholder();
+  load();
+}
+document.getElementById('searchBtn').addEventListener('click', applyFilters);
+document.getElementById('resetBtn').addEventListener('click', resetFilters);
+document.getElementById('typeFilter').addEventListener('change', syncValuePlaceholder);
+document.querySelectorAll('.filter-card input').forEach((el) =>
+  el.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyFilters(); })
+);
 
 load();
 </script>

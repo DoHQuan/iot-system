@@ -1,15 +1,16 @@
 {
   "name": "iot-backend",
   "version": "1.0.0",
-  "description": "Backend API + MQTT bridge cho he thong IoT ESP8266 (BTL IOT va Ung dung)",
+  "description": "Backend API (Express + MySQL) + MQTT bridge cho he thong IoT ESP8266 (BTL IOT va Ung dung)",
   "main": "src/server.js",
   "type": "commonjs",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "db:init": "node scripts/init-db.js"
   },
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=18"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -17,6 +18,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
-    "mqtt": "^5.10.1"
+    "mqtt": "^5.10.1",
+    "mysql2": "^3.24.6"
   }
 }

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cảnh báo - IoT Monitor</title>
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body class="page">
+<header class="topbar" id="topbar"></header>
+<main class="main">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Cảnh báo cảm biến</h1>
+      <p class="page-subtitle" id="todayLabel"></p>
+    </div>
+    <span class="conn-badge" id="connBadge"></span>
+  </div>
+
+  <div class="error-state" id="loadError" hidden></div>
+  <div class="grid cols-3" id="warnCards"></div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="table-title">
+      <div style="font-weight:700;font-size:15px">Lịch sử dữ liệu</div>
+      <p class="page-subtitle" style="margin:2px 0 16px">3 cảm biến ngẫu nhiên từ ESP8266, cảnh báo khi vượt 50% thang đo</p>
+    </div>
+    <div id="tableWrap"></div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+</main>
+
+<script src="/js/icons.js"></script>
+<script src="/js/mock.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/layout.js"></script>
+<script>
+renderLayout('warning');
+document.getElementById('todayLabel').textContent = todayLabel();
+
+const state = { page: 1, size: 8 };
+const cards = document.getElementById('warnCards');
+
+// Tao the 1 lan, moi lan tai chi cap nhat noi dung de den nhay khong bi giat
+function ensureCards(sensors) {
+  if (cards.children.length) return;
+  cards.innerHTML = sensors.map((s) => `
+    <div class="card warn-card" data-type="${escapeHtml(s.type)}">
+      <div class="warn-head">
+        <div>
+          <div class="device-name">${escapeHtml(s.name)}</div>
+          <div class="warn-range">Thang đo 0–${s.max}, cảnh báo khi > ${s.threshold}</div>
+        </div>
+        <div class="warn-led" title="LED cảnh báo"></div>
+      </div>
+      <div class="warn-value">—</div>
+      <div class="warn-bar"><div class="warn-bar-fill"></div></div>
+      <div class="warn-status"></div>
+    </div>`).join('');
+}
+
+function updateCards(data) {
+  ensureCards(data.sensors);
+  const online = data.device_status === 'online';
+  data.sensors.forEach((s) => {
+    const card = cards.querySelector(`[data-type="${s.type}"]`);
+    const warning = online && s.warning;
+    card.classList.toggle('warning', warning);
+    card.querySelector('.warn-value').textContent = s.value === null ? '—' : s.value;
+    card.querySelector('.warn-bar-fill').style.width = `${s.value === null ? 0 : (s.value / s.max) * 100}%`;
+    card.querySelector('.warn-status').textContent = !online
+      ? 'Thiết bị offline, LED không hoạt động'
+      : warning ? 'CẢNH BÁO: LED đang nháy' : 'Bình thường';
+  });
+}
+
+function renderTable(items) {
+  const wrap = document.getElementById('tableWrap');
+  if (!items.length) {
+    wrap.innerHTML = '<div class="empty-state">Chưa có dữ liệu. Hãy nạp firmware mới cho ESP8266.</div>';
+    return;
+  }
+  wrap.innerHTML = `
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Tên cảm biến</th><th>Giá trị đo</th><th>Trạng thái</th><th>Thời gian thu thập</th></tr>
+      </thead>
+      <tbody>
+        ${items.map((it) => `
+          <tr>
+            <td class="mono-id">${formatId(it.id)}</td>
+            <td>${escapeHtml(it.sensor_name)}</td>
+            <td>${it.value}</td>
+            <td><span class="badge ${it.warning ? 'fail' : 'ok'}">${it.warning ? 'CẢNH BÁO' : 'BÌNH THƯỜNG'}</span></td>
+            <td>${formatTime(it.time)}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+async function load() {
+  const pager = document.getElementById('pagination');
+  try {
+    const data = await Api.get(`/api/random-sensors?page=${state.page}&size=${state.size}`);
+    document.getElementById('loadError').hidden = true;
+    updateCards(data);
+    renderTable(data.items);
+    if (!pager.contains(document.activeElement)) { // dang chon so dong/trang -> khong ve de
+      renderPager(pager, data,
+        (p) => { state.page = p; load(); },
+        (n) => { state.size = n; state.page = 1; load(); });
+    }
+    setConnection(data.device_status === 'online');
+  } catch (err) {
+    const box = document.getElementById('loadError');
+    box.hidden = false;
+    box.textContent = 'Không tải được dữ liệu cảm biến: ' + err.message;
+    setConnection(false);
+  }
+}
+
+load();
+setInterval(load, 5000);
+</script>
+</body>
+</html>

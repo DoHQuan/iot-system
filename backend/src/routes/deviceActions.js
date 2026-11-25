@@ -1,80 +1,79 @@
+// GET /api/device-actions (muc 4.3.4) - chi doc device_actions JOIN devices, users
+// Tham so: page, size, sort (time_desc|time_asc), search, device (id hoac device_key), target,
+//          action (ON|OFF), result (pending|ok|fail|timeout), from, to (UTC), time (chuoi thoi gian hien thi)
 const express = require('express');
 const db = require('../db');
+const { BadRequest, pagination, pickSort, parseDateParam, timeTextFilter } = require('../utils/params');
 
 const router = express.Router();
 
-const SORT_MAP = {
-  time_desc: 'da.timestamp DESC',
-  time_asc: 'da.timestamp ASC',
+const SORTS = {
+  time_desc: 'a.`timestamp` DESC, a.id DESC',
+  time_asc: 'a.`timestamp` ASC, a.id ASC',
 };
+const ACTIONS = ['ON', 'OFF'];
+const RESULTS = ['pending', 'ok', 'fail', 'timeout'];
 
-router.get('/', (req, res) => {
-  let page = parseInt(req.query.page, 10);
-  let size = parseInt(req.query.size, 10);
-  if (!Number.isInteger(page) || page < 1) page = 1;
-  if (!Number.isInteger(size) || size < 1 || size > 200) size = 20;
+router.get('/', async (req, res, next) => {
+  try {
+    const q = req.query;
+    const { page, size, offset } = pagination(q);
+    const orderBy = pickSort(q.sort, SORTS, 'time_desc');
 
-  const sortKey = SORT_MAP[req.query.sort] ? req.query.sort : 'time_desc';
-  const orderBy = SORT_MAP[sortKey];
+    const where = [];
+    const params = [];
+    const add = (cond) => {
+      if (!cond) return;
+      where.push(cond[0]);
+      params.push(...cond[1]);
+    };
 
-  const where = [];
-  const params = {};
+    const deviceRef = q.device || q.device_id;
+    if (deviceRef) add(['(d.id = ? OR d.device_key = ?)', [Number(deviceRef) || 0, String(deviceRef)]]);
+    if (q.target) add(['a.target = ?', [String(q.target).toLowerCase()]]);
+    if (q.action) {
+      const action = String(q.action).toUpperCase();
+      if (!ACTIONS.includes(action)) throw new BadRequest('Tham số action phải là ON hoặc OFF');
+      add(['a.action = ?', [action]]);
+    }
+    if (q.result) {
+      const result = String(q.result).toLowerCase();
+      if (!RESULTS.includes(result)) throw new BadRequest('Tham số result phải là pending, ok, fail hoặc timeout');
+      add(['a.result = ?', [result]]);
+    }
+    if (q.search) {
+      const like = `%${String(q.search).trim()}%`;
+      add([
+        '(d.device_name LIKE ? OR a.target LIKE ? OR a.action LIKE ? OR a.result LIKE ? OR u.full_name LIKE ? OR u.username LIKE ? OR a.note LIKE ?)',
+        [like, like, like, like, like, like, like],
+      ]);
+    }
+    const from = parseDateParam(q.from, 'from');
+    const to = parseDateParam(q.to, 'to');
+    if (from) add(['a.`timestamp` >= ?', [from]]);
+    if (to) add(['a.`timestamp` <= ?', [to]]);
+    add(timeTextFilter('a.`timestamp`', q.time));
 
-  if (req.query.search) {
-    where.push('(d.device_name LIKE @search OR da.target LIKE @search OR u.full_name LIKE @search)');
-    params.search = `%${req.query.search}%`;
-  }
-  if (req.query.device) {
-    where.push('d.device_key = @device');
-    params.device = req.query.device;
-  }
-  if (req.query.action) {
-    where.push('da.action = @action');
-    params.action = req.query.action;
-  }
-  if (req.query.result) {
-    where.push('da.result = @result');
-    params.result = req.query.result;
-  }
-  if (req.query.from) {
-    where.push('da.timestamp >= @from');
-    params.from = req.query.from;
-  }
-  if (req.query.to) {
-    where.push('da.timestamp <= @to');
-    params.to = req.query.to;
-  }
+    const fromSql = `FROM device_actions a
+      JOIN devices d ON d.id = a.device_id
+      LEFT JOIN users u ON u.id = a.issued_by
+      ${where.length ? 'WHERE ' + where.join(' AND ') : ''}`;
 
-  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-
-  const baseFrom = `
-    FROM device_actions da
-    JOIN devices d ON d.id = da.device_id
-    LEFT JOIN users u ON u.id = da.issued_by
-    ${whereSql}
-  `;
-
-  const total = db.prepare(`SELECT COUNT(*) AS c ${baseFrom}`).get(params).c;
-
-  const items = db
-    .prepare(
-      `SELECT
-         da.id AS id,
-         d.device_key AS device_id,
-         d.device_name AS device_name,
-         da.target AS target,
-         da.action AS action,
-         da.result AS result,
-         u.full_name AS issued_by,
-         da.note AS note,
-         da.timestamp AS time
-       ${baseFrom}
+    const [{ total }] = await db.query(`SELECT COUNT(*) AS total ${fromSql}`, params);
+    const items = await db.query(
+      `SELECT a.id, a.device_id, d.device_key, d.device_name, a.target, a.action, a.result,
+              COALESCE(u.full_name, u.username) AS issued_by, a.issued_by AS issued_by_id,
+              a.\`timestamp\` AS time, a.note
+       ${fromSql}
        ORDER BY ${orderBy}
-       LIMIT @limit OFFSET @offset`
-    )
-    .all({ ...params, limit: size, offset: (page - 1) * size });
+       LIMIT ? OFFSET ?`,
+      [...params, size, offset]
+    );
 
-  res.json({ items, total, page, size });
+    res.json({ items, total: Number(total), page, size });
+  } catch (err) {
+    next(err);
+  }
 });
 
 module.exports = router;

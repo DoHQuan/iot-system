@@ -1,0 +1,8 @@
+#pragma once
+
+const char* WIFI_SSID     = "YOUR_WIFI_SSID";
+const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+const char* MQTT_HOST = "192.168.1.100";
+const uint16_t MQTT_PORT = 8888;
+const char* MQTT_USER     = "iot_device";
+const char* MQTT_PASSWORD = "YOUR_MQTT_PASSWORD";

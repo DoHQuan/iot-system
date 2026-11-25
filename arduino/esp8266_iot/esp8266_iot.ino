@@ -12,25 +12,16 @@
 #define LED1PIN   D5   // Den 1 noi vao D5
 #define LED2PIN   D6   // Den 2 noi vao D6
 #define LED3PIN   D7   // Den 3 noi vao D7
+#define WARN1PIN  D1   // LED canh bao cam bien 1 (0-10)
+#define WARN2PIN  D2   // LED canh bao cam bien 2 (0-100)
+#define WARN3PIN  D0   // LED canh bao cam bien 3 (0-1000)
 
 DHT dht(DHTPIN, DHTTYPE);
 
 // ======================================================
-// 2. CAU HINH WIFI
+// 2. CAU HINH WIFI / MQTT
 // ======================================================
-const char* WIFI_SSID     = "YOUR_WIFI_SSID";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
-
-// ======================================================
-// 3. CAU HINH MQTT
-// ======================================================
-// IP cua may tinh/hotspot dang chay Mosquitto Broker
-const char* MQTT_HOST = "192.168.1.184";
-const uint16_t MQTT_PORT = 8888;
-
-// Tai khoan MQTT
-const char* MQTT_USER     = "quan";
-const char* MQTT_PASSWORD = "YOUR_MQTT_PASSWORD";
+#include "local_config.h"
 
 // ID cua thiet bi - PHAI KHOP voi devices.device_key trong Database
 const char* DEVICE_ID = "esp8266-01";
@@ -52,9 +43,10 @@ const int DAYLIGHT_OFFSET_SEC = 0;
 // ======================================================
 // 6. CHU KY HOAT DONG
 // ======================================================
-const unsigned long SENSOR_INTERVAL_MS = 2000;  // Gui du lieu cam bien moi 2 giay
+const unsigned long SENSOR_INTERVAL_MS = 5000;  // Gui du lieu cam bien moi 5 giay
 const unsigned long WIFI_RETRY_MS      = 10000; // Thu lai WiFi moi 10 giay
 const unsigned long MQTT_RETRY_MS      = 3000;  // Thu lai MQTT moi 3 giay
+const unsigned long BLINK_INTERVAL_MS  = 250;   // Nhay LED canh bao moi 250 ms
 
 // ======================================================
 // 7. DOI TUONG WIFI / MQTT
@@ -71,6 +63,16 @@ bool led3On = false;
 unsigned long lastSensorPublish = 0;
 unsigned long lastWiFiAttempt = 0;
 unsigned long lastMQTTAttempt = 0;
+
+// 3 cam bien ngau nhien: random(0, 11), random(0, 101), random(0, 1001)
+const uint8_t RANDOM_COUNT = 3;
+const char* RANDOM_FIELDS[RANDOM_COUNT] = {"random_10", "random_100", "random_1000"};
+const long RANDOM_LIMITS[RANDOM_COUNT] = {11, 101, 1001};
+const uint8_t WARN_PINS[RANDOM_COUNT] = {WARN1PIN, WARN2PIN, WARN3PIN};
+long randomValues[RANDOM_COUNT] = {0, 0, 0};
+bool warnActive[RANDOM_COUNT] = {false, false, false};
+bool warnBlinkOn = false;
+unsigned long lastBlink = 0;
 
 // ======================================================
 // 9. DOC QUANG TRO (LDR) CO LOC NHIEU
@@ -113,6 +115,28 @@ void applyLed(uint8_t led, bool state) {
   } else if (led == 3) {
     led3On = state;
     digitalWrite(LED3PIN, state ? HIGH : LOW);
+  }
+}
+
+// ======================================================
+// 11b. CAM BIEN NGAU NHIEN VA LED CANH BAO
+// Gia tri > 50% thang do -> LED tuong ung nhay; nguoc lai tat.
+// ======================================================
+void updateRandomSensors() {
+  for (uint8_t i = 0; i < RANDOM_COUNT; i++) {
+    randomValues[i] = random(0, RANDOM_LIMITS[i]);
+    warnActive[i] = randomValues[i] * 2 > RANDOM_LIMITS[i] - 1;
+    if (!warnActive[i]) digitalWrite(WARN_PINS[i], LOW);
+  }
+}
+
+void updateWarningLeds() {
+  unsigned long now = millis();
+  if (now - lastBlink < BLINK_INTERVAL_MS) return;
+  lastBlink = now;
+  warnBlinkOn = !warnBlinkOn;
+  for (uint8_t i = 0; i < RANDOM_COUNT; i++) {
+    if (warnActive[i]) digitalWrite(WARN_PINS[i], warnBlinkOn ? HIGH : LOW);
   }
 }
 
@@ -319,19 +343,26 @@ void publishSensorData() {
   float temperature = dht.readTemperature();
   float humidity = dht.readHumidity();
   int lightValue = readLdrFiltered(10);
+  bool dhtOk = !isnan(temperature) && !isnan(humidity);
 
-  if (isnan(temperature) || isnan(humidity)) {
+  if (!dhtOk) {
     Serial.println("Khong doc duoc du lieu DHT11");
-    return;
   }
+
+  updateRandomSensors();
 
   // Payload JSON de Backend parse va ghi vao bang data_sensor
   // (moi truong temperature/humidity/light se duoc tach thanh 1 ban ghi rieng theo sensor_id)
   String payload = "{";
   payload += "\"device_id\":\""  + String(DEVICE_ID) + "\",";
-  payload += "\"temperature\":"  + String(temperature, 1) + ",";
-  payload += "\"humidity\":"     + String(humidity, 1) + ",";
+  if (dhtOk) {
+    payload += "\"temperature\":"  + String(temperature, 1) + ",";
+    payload += "\"humidity\":"     + String(humidity, 1) + ",";
+  }
   payload += "\"light\":"        + String(lightValue) + ",";
+  for (uint8_t i = 0; i < RANDOM_COUNT; i++) {
+    payload += "\"" + String(RANDOM_FIELDS[i]) + "\":" + String(randomValues[i]) + ",";
+  }
   payload += "\"timestamp\":\""  + getTimeString() + "\"";
   payload += "}";
 
@@ -358,6 +389,12 @@ void setup() {
   applyLed(1, false);
   applyLed(2, false);
   applyLed(3, false);
+
+  for (uint8_t i = 0; i < RANDOM_COUNT; i++) {
+    pinMode(WARN_PINS[i], OUTPUT);
+    digitalWrite(WARN_PINS[i], LOW);
+  }
+  randomSeed(micros() ^ analogRead(LDRPIN));
 
   dht.begin();
 
@@ -391,4 +428,6 @@ void loop() {
     lastSensorPublish = now;
     publishSensorData();
   }
+
+  updateWarningLeds();
 }

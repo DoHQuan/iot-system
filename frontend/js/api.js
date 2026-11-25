@@ -32,7 +32,18 @@ const Api = (() => {
     const token = getToken();
     if (token) headers.Authorization = `Bearer ${token}`;
 
-    const res = await fetch(path, { ...options, headers });
+    // Khong co backend -> dung du lieu gia lap trong js/mock.js
+    let res;
+    try {
+      res = await fetch(path, { ...options, headers });
+    } catch (networkErr) {
+      if (window.MockApi) return MockApi.handle(path, options); // server khong chay
+      throw networkErr;
+    }
+    const isJson = (res.headers.get('content-type') || '').includes('application/json');
+    if (window.MockApi && path.startsWith('/api/') && !isJson) {
+      return MockApi.handle(path, options); // chay bang Live Server: /api/... tra ve trang 404 HTML
+    }
 
     if (res.status === 401) {
       clearSession();

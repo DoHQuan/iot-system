@@ -6,6 +6,7 @@ function renderLayout(activePage) {
     { href: '/index.html', key: 'dashboard', label: 'Trang chủ', icon: Icons.home },
     { href: '/sensor-data.html', key: 'sensor-data', label: 'Cảm biến', icon: Icons.sensor },
     { href: '/history.html', key: 'history', label: 'Lịch sử hoạt động', icon: Icons.history },
+    { href: '/warning.html', key: 'warning', label: 'Cảnh báo', icon: Icons.bulb },
     { href: '/profile.html', key: 'profile', label: 'Hồ sơ', icon: Icons.user },
   ];
 
@@ -107,7 +108,7 @@ function setConnection(ok) {
 }
 
 function resultBadgeLabel(result) {
-  return { ok: 'SUCCESS', fail: 'FAIL', timeout: 'TIMEOUT', pending: 'PENDING' }[result] || result;
+  return { ok: 'SUCCESS', fail: 'FAILED', timeout: 'TIMEOUT', pending: 'PENDING' }[result] || result;
 }
 
 function todayLabel() {
@@ -129,7 +130,19 @@ function pageNumbers(page, totalPages) {
   return pages;
 }
 
-function renderPager(container, { page, size, total }, onGoTo) {
+// Chuyen gia tri <input type="datetime-local"> (gio Viet Nam) sang chuoi UTC
+// "YYYY-MM-DD HH:MM:SS" de so sanh dung voi cot timestamp (SQLite luu UTC).
+function localInputToUtcSql(value, endOfMinute = false) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  if (endOfMinute) d.setSeconds(59, 999);
+  return d.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+const PAGE_SIZE_OPTIONS = [5, 8, 10, 20, 50, 100];
+
+function renderPager(container, { page, size, total }, onGoTo, onSizeChange) {
   const totalPages = Math.max(1, Math.ceil(total / size));
   const from = total === 0 ? 0 : (page - 1) * size + 1;
   const to = Math.min(total, page * size);
@@ -143,7 +156,12 @@ function renderPager(container, { page, size, total }, onGoTo) {
     .join('');
 
   container.innerHTML = `
-    <div>Hiển thị ${from}-${to} / ${total} bản ghi</div>
+    <div class="pager-info">Hiển thị ${from}-${to} / ${total} bản ghi</div>
+    ${onSizeChange ? `<label class="page-size">Số dòng/trang
+      <select class="page-size-select">
+        ${PAGE_SIZE_OPTIONS.map((n) => `<option value="${n}"${n === size ? ' selected' : ''}>${n}</option>`).join('')}
+      </select>
+    </label>` : ''}
     <div class="pager-btns">
       <button class="page-btn" id="pagerPrev" ${page <= 1 ? 'disabled' : ''}>${Icons.chevronLeft}</button>
       ${numbers}
@@ -154,6 +172,8 @@ function renderPager(container, { page, size, total }, onGoTo) {
   container.querySelectorAll('.page-btn[data-page]').forEach((btn) => {
     btn.addEventListener('click', () => onGoTo(Number(btn.dataset.page)));
   });
+  const sizeSel = container.querySelector('.page-size-select');
+  if (sizeSel && onSizeChange) sizeSel.addEventListener('change', () => onSizeChange(Number(sizeSel.value)));
   const prev = document.getElementById('pagerPrev');
   const next = document.getElementById('pagerNext');
   if (prev) prev.addEventListener('click', () => page > 1 && onGoTo(page - 1));

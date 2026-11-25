@@ -1,5 +1,5 @@
 @echo off
-REM ==== Chay MQTT Broker (Mosquitto) cho du an iot-system, cong 8888, user quan/123 ====
+REM ==== Chay MQTT Broker (Mosquitto) cho du an iot-system, cong 8888 ====
 title IoT - MQTT Broker 8888
 echo [MQTT] Dang khoi dong Mosquitto o cong 8888 ...
 echo [MQTT] De dong broker: dong cua so nay hoac nhan Ctrl+C

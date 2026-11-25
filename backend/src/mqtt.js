@@ -1,214 +1,226 @@
+// Cau noi MQTT (muc 4.2.3 bao cao):
+//   datasensors    ESP8266 -> Backend : du lieu cam bien  -> INSERT data_sensor theo sensor_id
+//   devicecontrol  Backend -> ESP8266 : lenh LED1_ON, ALL_OFF...
+//   deviceresponse ESP8266 -> Backend : ACK {device_id, action, led1..led3, result, time}
+//   devicestatus   ESP8266/LWT -> Backend : {device_id, status: online|offline}
 const mqtt = require('mqtt');
 const db = require('./db');
+const deviceState = require('./services/deviceState');
+const { RANDOM_SENSORS } = require('./services/randomSensors');
 
 const HOST = process.env.MQTT_HOST || 'localhost';
 const PORT = process.env.MQTT_PORT || 1883;
-const USERNAME = process.env.MQTT_USERNAME || undefined;
-const PASSWORD = process.env.MQTT_PASSWORD || undefined;
-const CLIENT_ID = process.env.MQTT_CLIENT_ID || 'iot-backend';
-
 const TOPIC_TELEMETRY = process.env.MQTT_TOPIC_TELEMETRY || 'datasensors';
 const TOPIC_CONTROL = process.env.MQTT_TOPIC_CONTROL || 'devicecontrol';
 const TOPIC_RESPONSE = process.env.MQTT_TOPIC_RESPONSE || 'deviceresponse';
 const TOPIC_STATUS = process.env.MQTT_TOPIC_STATUS || 'devicestatus';
+// Payload dang chuoi "Nhiet do: .. | Do am: .. | Anh sang: .. | Thoi gian: .." khong co ma thiet bi
+// -> gan cho thiet bi nay
+const TEXT_PAYLOAD_DEVICE = process.env.MQTT_LEGACY_DEVICE_ID || 'esp8266-01';
 
 const url = `mqtt://${HOST}:${PORT}`;
-const client = mqtt.connect(url, {
-  clientId: CLIENT_ID,
-  username: USERNAME,
-  password: PASSWORD,
-  reconnectPeriod: 3000,
-  connectTimeout: 10000,
-});
+let client = null;
 
-const getDeviceByKey = db.prepare('SELECT * FROM devices WHERE device_key = ?');
-const getSensor = db.prepare('SELECT * FROM sensors WHERE device_id = ? AND sensor_type = ?');
-const insertSensorValue = db.prepare(
-  'INSERT INTO data_sensor (sensor_id, value, timestamp) VALUES (?, ?, CURRENT_TIMESTAMP)'
-);
-const touchDeviceOnline = db.prepare(
-  `UPDATE devices SET status = 'online', last_seen = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-);
-const setDeviceStatus = db.prepare(
-  `UPDATE devices SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-);
-const findPendingAction = db.prepare(
-  `SELECT * FROM device_actions
-   WHERE device_id = ? AND target = ? AND action = ? AND result = 'pending'
-   ORDER BY timestamp DESC LIMIT 1`
-);
-const updateActionResult = db.prepare(
-  `UPDATE device_actions SET result = ?, note = ? WHERE id = ?`
-);
-const setLed1State = db.prepare(
-  `UPDATE devices SET led1_state = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-);
-const setLed2State = db.prepare(
-  `UPDATE devices SET led2_state = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-);
-const setLed3State = db.prepare(
-  `UPDATE devices SET led3_state = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-);
+const SENSOR_FIELDS = ['temperature', 'humidity', 'light', ...RANDOM_SENSORS.map((s) => s.type)];
 
-const SENSOR_FIELDS = ['temperature', 'humidity', 'light'];
+// ---- Tra cuu thiet bi / cam bien (cache vi duoc goi moi 2 giay) ----
+const deviceCache = new Map(); // device_key -> device row
+const sensorCache = new Map(); // `${device.id}:${type}` -> sensor.id
 
-client.on('connect', () => {
-  console.log(`[MQTT] Da ket noi toi broker ${url}`);
-  client.subscribe([TOPIC_TELEMETRY, TOPIC_RESPONSE, TOPIC_STATUS], (err) => {
-    if (err) {
-      console.error('[MQTT] Loi subscribe:', err.message);
-    } else {
-      console.log(`[MQTT] Da subscribe: ${TOPIC_TELEMETRY}, ${TOPIC_RESPONSE}, ${TOPIC_STATUS}`);
-    }
-  });
-});
-
-client.on('reconnect', () => console.log('[MQTT] Dang thu ket noi lai...'));
-client.on('error', (err) => console.error('[MQTT] Loi:', err.message));
-
-client.on('message', (topic, payloadBuf) => {
-  const raw = payloadBuf.toString();
-  let data;
-  try {
-    data = JSON.parse(raw);
-  } catch (e) {
-    // Legacy telemetry has no device ID; enable only for the configured device.
-    const legacyDeviceKey = process.env.MQTT_LEGACY_DEVICE_ID;
-    const match = topic === TOPIC_TELEMETRY && legacyDeviceKey && raw.trim().match(
-      /^Nhiet do:\s*(-?\d+(?:\.\d+)?)\s*C\s*\|\s*Do am:\s*(\d+(?:\.\d+)?)\s*%\s*\|\s*Anh sang:\s*(\d+(?:\.\d+)?)\s*\|\s*Thoi gian:\s*\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2}$/
-    );
-    if (!match) {
-      console.warn(`[MQTT] Bo qua payload khong phai JSON tren topic ${topic}: ${raw}`);
-      return;
-    }
-    data = {
-      device_id: legacyDeviceKey,
-      temperature: Number(match[1]),
-      humidity: Number(match[2]),
-      light: Number(match[3]),
-    };
+async function getDeviceByKey(key) {
+  if (!deviceCache.has(key)) {
+    const row = await db.queryOne('SELECT id, device_key, device_name FROM devices WHERE device_key = ?', [key]);
+    if (!row) return null;
+    deviceCache.set(key, row);
   }
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return;
+  return deviceCache.get(key);
+}
 
-  if (topic === TOPIC_TELEMETRY) handleTelemetry(data);
-  else if (topic === TOPIC_RESPONSE) handleResponse(data);
-  else if (topic === TOPIC_STATUS) handleStatus(data);
-});
+async function getSensorId(deviceId, type) {
+  const k = `${deviceId}:${type}`;
+  if (!sensorCache.has(k)) {
+    const row = await db.queryOne('SELECT id FROM sensors WHERE device_id = ? AND sensor_type = ?', [deviceId, type]);
+    if (!row) return null;
+    sensorCache.set(k, row.id);
+  }
+  return sensorCache.get(k);
+}
 
-function handleTelemetry(data) {
-  const deviceKey = data.device_id;
-  if (!deviceKey) return;
-  const device = getDeviceByKey.get(deviceKey);
+// ---- Phan tich payload ----
+function parseTelemetry(raw) {
+  try {
+    const data = JSON.parse(raw);
+    if (data && typeof data === 'object' && !Array.isArray(data)) return data;
+  } catch {
+    // khong phai JSON -> thu dang chuoi text trong bao cao
+  }
+  const num = (re) => {
+    const m = raw.match(re);
+    return m ? Number(m[1].replace(',', '.')) : undefined;
+  };
+  const data = {
+    device_id: TEXT_PAYLOAD_DEVICE,
+    temperature: num(/Nhiet\s*do:\s*(-?\d+(?:[.,]\d+)?)/i),
+    humidity: num(/Do\s*am:\s*(-?\d+(?:[.,]\d+)?)/i),
+    light: num(/Anh\s*sang:\s*(-?\d+(?:[.,]\d+)?)/i),
+  };
+  return SENSOR_FIELDS.some((f) => data[f] !== undefined) ? data : null;
+}
+
+function parseJson(raw) {
+  try {
+    const data = JSON.parse(raw);
+    return data && typeof data === 'object' && !Array.isArray(data) ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+// ---- Xu ly tung topic ----
+async function handleTelemetry(raw) {
+  const data = parseTelemetry(raw);
+  if (!data) {
+    console.warn(`[MQTT] Bo qua payload khong hop le tren ${TOPIC_TELEMETRY}: ${raw}`);
+    return;
+  }
+  const device = await getDeviceByKey(String(data.device_id || TEXT_PAYLOAD_DEVICE));
   if (!device) {
-    console.warn(`[MQTT] Nhan telemetry tu thiet bi chua dang ky: ${deviceKey}`);
+    console.warn(`[MQTT] Nhan du lieu tu thiet bi chua dang ky: ${data.device_id}`);
     return;
   }
 
-  for (const field of SENSOR_FIELDS) {
-    if (data[field] === undefined || data[field] === null) continue;
-    const value = Number(data[field]);
-    if (Number.isNaN(value)) continue;
-    const sensor = getSensor.get(device.id, field);
-    if (!sensor) continue;
-    insertSensorValue.run(sensor.id, value);
+  const rows = [];
+  for (const type of SENSOR_FIELDS) {
+    if (data[type] === undefined || data[type] === null || data[type] === '') continue;
+    const value = Number(data[type]);
+    if (!Number.isFinite(value)) continue;
+    const sensorId = await getSensorId(device.id, type);
+    if (sensorId) rows.push([sensorId, value]);
   }
-
-  touchDeviceOnline.run(device.id);
+  if (rows.length) {
+    // Cung mot thoi diem cho ca 3 gia tri cua mot lan do
+    await db.query('INSERT INTO data_sensor (sensor_id, value, `timestamp`) VALUES ?', [
+      rows.map(([sensorId, value]) => [sensorId, value, new Date()]),
+    ]);
+  }
+  await deviceState.markSeen(device.id);
 }
 
-// Chuyen chuoi action tu firmware (vd "LED1_ON", "ALL_OFF", "ON") thanh
-// { target: 'led1' | 'led2' | 'all', state: 'ON' | 'OFF' } de khop voi
-// ban ghi da luu trong device_actions (target + action).
-function parseAction(action) {
-  const state = action.endsWith('OFF') ? 'OFF' : action.endsWith('ON') ? 'ON' : null;
-  if (!state) return null;
-  let target = 'all';
-  if (action.startsWith('LED1')) target = 'led1';
-  else if (action.startsWith('LED2')) target = 'led2';
-  else if (action.startsWith('LED3')) target = 'led3';
-  return { target, state };
-}
+// Cac lenh dang cho ACK: { deviceId, command, resolve }
+const waiters = [];
+const LOST_NOTE = 'Thiết bị mất kết nối, lệnh không được thực hiện';
+const PENDING_NOTE = 'Thiết bị mất kết nối, đang chờ thiết bị quay lại';
 
-function normState(value) {
-  const s = String(value || '').toUpperCase();
-  return s === 'ON' || s === 'OFF' ? s : null;
-}
-
-function handleResponse(data) {
-  // Payload tu firmware: { device_id, action, led1, led2, result, time }
-  const deviceKey = data.device_id;
-  const action = (data.action || '').toUpperCase();
-  if (!deviceKey || !action) return;
-  const device = getDeviceByKey.get(deviceKey);
+async function handleResponse(raw) {
+  const data = parseJson(raw);
+  if (!data || !data.device_id) return;
+  const device = await getDeviceByKey(String(data.device_id));
   if (!device) return;
 
-  // Firmware luon bao ca 2 den trong moi ACK -> dong bo trang thai ngay.
-  const led1 = normState(data.led1);
-  const led2 = normState(data.led2);
-  const led3 = normState(data.led3);
-  if (led1) setLed1State.run(led1, device.id);
-  if (led2) setLed2State.run(led2, device.id);
-  if (led3) setLed3State.run(led3, device.id);
+  deviceState.setLedStates(device.id, data);
+  await deviceState.markSeen(device.id);
 
-  // "SYNC" chi de dong bo trang thai khi ESP vua ket noi, khong gan voi lenh nao.
-  const parsed = parseAction(action);
-  if (parsed) {
-    const ok = String(data.result).toUpperCase() === 'SUCCESS';
-    // Khop ACK voi lenh dang cho (theo dung den va ON/OFF).
-    if (parsed.target === 'all') {
-      for (const t of ['all', 'led1', 'led2', 'led3']) {
-        const pending = findPendingAction.get(device.id, t, parsed.state);
-        if (pending) {
-          updateActionResult.run(ok ? 'ok' : 'fail', ok ? null : `ESP8266 result=${data.result}`, pending.id);
-        }
-      }
-    } else {
-      const pending = findPendingAction.get(device.id, parsed.target, parsed.state);
-      if (pending) {
-        updateActionResult.run(ok ? 'ok' : 'fail', ok ? null : `ESP8266 result=${data.result}`, pending.id);
-      }
-    }
-  }
-
-  touchDeviceOnline.run(device.id);
-}
-
-function handleStatus(data) {
-  const deviceKey = data.device_id;
-  if (!deviceKey) return;
-  const device = getDeviceByKey.get(deviceKey);
-  if (!device) return;
-  const status = String(data.status || '').toLowerCase() === 'online' ? 'online' : 'offline';
-  setDeviceStatus.run(status, device.id);
-}
-
-// Neu khong nhan telemetry qua lau thi tu dong danh dau thiet bi offline
-// (bu cho truong hop firmware chua gui LWT hoac mat ket noi dot ngot).
-const OFFLINE_TIMEOUT_SEC = Number(process.env.DEVICE_OFFLINE_TIMEOUT_SEC || 15);
-const markStaleOffline = db.prepare(`
-  UPDATE devices SET status = 'offline'
-  WHERE status = 'online'
-    AND (last_seen IS NULL OR (strftime('%s','now') - strftime('%s', last_seen)) > ?)
-`);
-setInterval(() => {
-  try {
-    markStaleOffline.run(OFFLINE_TIMEOUT_SEC);
-  } catch (e) {
-    console.error('[DB] Loi kiem tra thiet bi offline:', e.message);
-  }
-}, 5000);
-
-function publishCommand(action) {
-  return new Promise((resolve, reject) => {
-    if (!client.connected) {
-      reject(new Error('Backend chưa kết nối được tới MQTT Broker'));
-      return;
-    }
-    client.publish(TOPIC_CONTROL, action, { qos: 1 }, (err) => {
-      if (err) reject(err);
-      else resolve();
-    });
+  // ESP8266 tra ve action da chuan hoa (vd "LED1_ON") -> khop voi lenh dang cho som nhat
+  const command = String(data.action || '').trim().toUpperCase().replace(/\s+/g, '_');
+  const idx = waiters.findIndex((w) => w.deviceId === device.id && w.command === command);
+  if (idx === -1) return;
+  const [waiter] = waiters.splice(idx, 1);
+  const ok = String(data.result || '').toUpperCase() === 'SUCCESS';
+  waiter.resolve({
+    result: ok ? 'ok' : 'fail',
+    note: ok ? null : `Thiết bị từ chối lệnh (result=${data.result || 'không rõ'})`,
   });
 }
 
-module.exports = { client, publishCommand };
+async function handleStatus(raw, retained) {
+  const data = parseJson(raw);
+  if (!data || !data.device_id) return;
+  const device = await getDeviceByKey(String(data.device_id));
+  if (!device) return;
+  if (String(data.status).toLowerCase() !== 'online') {
+    await deviceState.markOffline(device.id);
+    return;
+  }
+  await deviceState.markSeen(device.id);
+  if (retained) return;
+  // ESP vua ket noi lai -> lenh dang cho ACK da mat (khong doi het timeoutMs)
+  for (let i = waiters.length - 1; i >= 0; i--) {
+    if (waiters[i].deviceId !== device.id) continue;
+    const [waiter] = waiters.splice(i, 1);
+    waiter.resolve({ result: 'fail', note: LOST_NOTE });
+  }
+}
+
+function start() {
+  client = mqtt.connect(url, {
+    clientId: `${process.env.MQTT_CLIENT_ID || 'iot-backend'}-${Math.random().toString(16).slice(2, 8)}`,
+    username: process.env.MQTT_USERNAME || undefined,
+    password: process.env.MQTT_PASSWORD || undefined,
+    reconnectPeriod: 3000,
+    connectTimeout: 10000,
+  });
+
+  client.on('connect', () => {
+    console.log(`[MQTT] Da ket noi toi broker ${url}`);
+    client.subscribe([TOPIC_TELEMETRY, TOPIC_RESPONSE, TOPIC_STATUS], { qos: 0 }, (err) => {
+      if (err) console.error('[MQTT] Loi subscribe:', err.message);
+      else console.log(`[MQTT] Da subscribe: ${TOPIC_TELEMETRY}, ${TOPIC_RESPONSE}, ${TOPIC_STATUS}`);
+    });
+  });
+  client.on('reconnect', () => console.log(`[MQTT] Dang thu ket noi lai ${url} ...`));
+  client.on('error', (err) => console.error('[MQTT] Loi:', err.message));
+
+  client.on('message', (topic, payload, packet) => {
+    const raw = payload.toString().trim();
+    let task;
+    if (topic === TOPIC_TELEMETRY) task = handleTelemetry(raw);
+    else if (topic === TOPIC_RESPONSE) task = handleResponse(raw);
+    else if (topic === TOPIC_STATUS) task = handleStatus(raw, packet.retain);
+    if (task) task.catch((e) => console.error(`[MQTT] Loi xu ly ban tin ${topic}:`, e.message));
+  });
+}
+
+function isConnected() {
+  return Boolean(client && client.connected);
+}
+
+// Publish lenh va cho ACK toi da timeoutMs.
+// Thiet bi offline, hoac im lang suot thoi gian cho -> 'pending' (ket thuc khi thiet bi quay lai).
+// Thiet bi van gui du lieu ma khong ACK -> 'timeout'.
+// Tra ve { result: 'ok' | 'fail' | 'timeout' | 'pending', note }
+async function sendCommand(deviceId, command, timeoutMs) {
+  if (!isConnected()) {
+    return { result: 'fail', note: 'Backend chưa kết nối được tới MQTT Broker' };
+  }
+  if (!deviceState.isOnline(deviceId)) return { result: 'pending', note: PENDING_NOTE };
+
+  let waiter;
+  const ack = new Promise((resolve) => {
+    waiter = { deviceId, command, resolve };
+    waiters.push(waiter);
+  });
+  try {
+    await new Promise((resolve, reject) => {
+      client.publish(TOPIC_CONTROL, command, { qos: 1 }, (err) => (err ? reject(err) : resolve()));
+    });
+  } catch (err) {
+    waiters.splice(waiters.indexOf(waiter), 1);
+    return { result: 'fail', note: `Không gửi được lệnh lên MQTT Broker: ${err.message}` };
+  }
+
+  const sentAt = Date.now();
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      const i = waiters.indexOf(waiter);
+      if (i !== -1) waiters.splice(i, 1);
+      if (deviceState.seenSince(deviceId, sentAt)) resolve({ result: 'timeout', note: 'Không nhận được phản hồi từ thiết bị' });
+      else resolve({ result: 'pending', note: PENDING_NOTE });
+    }, timeoutMs);
+  });
+  const outcome = await Promise.race([ack, timeout]);
+  clearTimeout(timer);
+  return outcome;
+}
+
+module.exports = { start, isConnected, sendCommand };
